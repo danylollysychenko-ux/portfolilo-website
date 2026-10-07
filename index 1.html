@@ -538,6 +538,12 @@
         border: 1px solid var(--line);
         background: #f4f7f8;
       }
+      .attachment-reference {
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
       .attachment-preview-list > p {
         color: var(--muted);
       }
@@ -583,6 +589,12 @@
       .attachment-file-name {
         margin: 0;
         color: var(--muted);
+      }
+      .modal-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        backdrop-filter: blur(12px);
       }
       .preview-paper {
         position: relative;
@@ -680,6 +692,24 @@
         .attachment-preview,
         .preview-toc-section {
           break-inside: auto;
+        }
+        .attachment-preview {
+          min-height: 10in;
+          break-after: page;
+        }
+        .work-link-qr {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 8px;
+          color: var(--muted);
+          font-size: 10px;
+          text-transform: uppercase;
+        }
+        .work-link-qr img {
+          width: 70px;
+          height: 70px;
+          background: #fff;
         }
         .pdf-page {
           break-inside: avoid;
@@ -925,6 +955,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="node_modules/jszip/dist/jszip.min.js"></script>
     <script src="node_modules/docx-preview/dist/docx-preview.min.js"></script>
+    <script src="node_modules/qrcode-generator/qrcode.js"></script>
     <script type="module" src="document-preview.js"></script>
     <script src="script.js"></script>
   </body>

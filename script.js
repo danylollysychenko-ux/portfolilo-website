@@ -755,14 +755,22 @@ function getPath(path) {
 }
 function fileUpload(key, label, bind) {
   const defaultBindings = {
-    cover: "hiringDocuments.coverLetter",
-    resume: "hiringDocuments.resume",
+    cover: "hiringDocuments.coverLetter.file",
+    resume: "hiringDocuments.resume.file",
   };
   const path = bind || defaultBindings[key] || key;
-  let value = bind ? getPath(bind) : state.files[key] || state.student.image;
+  const isProfileImage = path === "student.image";
+  const accept = isProfileImage
+    ? ".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp"
+    : ".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/gif,image/webp";
+  let value = bind
+    ? getPath(bind)
+    : defaultBindings[key]
+      ? getPath(defaultBindings[key])
+      : state.files[key] || state.student.image;
   if (value && typeof value === "object")
     value = value.fileName || value.name || "";
-  return `<div class="upload-box"><div><strong>${value ? "File attached" : "No file attached"}</strong><small>PDF, JPG, PNG, DOC, or DOCX · stored locally</small></div><label class="upload-label">${label}<input type="file" data-file="${path}" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"></label></div>${value ? `<div class="file-item"><span>${esc(value)}</span><button type="button" data-remove-file="${path}">Remove</button></div>` : ""}`;
+  return `<div class="upload-box"><div><strong>${value ? "File attached" : "No file attached"}</strong><small>${isProfileImage ? "PNG, JPG, JPEG, GIF, or WEBP image" : "PDF, DOC, DOCX, or image"} · stored locally</small></div><label class="upload-label">${label}<input type="file" data-file="${path}" accept="${accept}"></label></div>${value ? `<div class="file-item"><span>${esc(value)}</span><button type="button" data-remove-file="${path}">Remove</button></div>` : ""}`;
 }
 function documentsView() {
   return (
@@ -776,7 +784,7 @@ function documentsView() {
 }
 function recommendations() {
   const r = state.files.recommendations || [];
-  return `<div>${[0, 1, ...Array.from({ length: Math.max(0, r.length - 2) }, (_, i) => i + 2)].map((i) => `<div class="repeater"><div class="repeater-header"><strong>Recommendation ${i + 1}</strong>${i > 1 ? `<button class="remove-button" data-remove-rec="${i}">Remove</button>` : ""}</div>${fileUpload("recommendations", "Upload letter", "files.recommendations." + i)}</div>`).join("")}</div><button class="add-button" data-add="recommendation">+ Add recommendation</button><p class="microcopy">${r.filter(Boolean).length} of 2 required recommendations uploaded.</p>`;
+  return `<div>${[0, 1, ...Array.from({ length: Math.max(0, r.length - 2) }, (_, i) => i + 2)].map((i) => `<div class="repeater"><div class="repeater-header"><strong>Recommendation ${i + 1}</strong>${i > 1 ? `<button class="remove-button" data-remove-rec="${i}">Remove</button>` : ""}</div>${fileUpload("recommendations", "Upload letter", "files.recommendations." + i + ".file")}</div>`).join("")}</div><button class="add-button" data-add="recommendation">+ Add recommendation</button><p class="microcopy">${r.filter(Boolean).length} of 2 required recommendations uploaded.</p>`;
 }
 function samplesView() {
   return (
@@ -785,7 +793,7 @@ function samplesView() {
       "Work samples",
       `Add at least 5 projects. You can include more to show range and growth.`,
     ) +
-    `${state.samples.length < 5 ? '<div class="warning"><strong>Add ' + (5 - state.samples.length) + " more work sample" + (5 - state.samples.length === 1 ? "" : "s") + " to meet the requirement.</strong></div>" : ""}<section class="section-card">${state.samples.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Work sample ${i + 1}</strong><button class="remove-button" data-remove-sample="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-sample="${i}.title" value="${esc(x.title)}" placeholder="e.g. Java Calculator"></label><label class="field-label">Date<input data-sample="${i}.date" value="${esc(x.date)}" placeholder="Month, year"></label><label class="field-label">Class / project<input data-sample="${i}.classOrProject" value="${esc(x.classOrProject)}" placeholder="e.g. Programming II"></label><label class="field-label">Skills demonstrated<input data-sample="${i}.skills" value="${esc(Array.isArray(x.skills) ? x.skills.join(", ") : x.skills)}" placeholder="Java, problem solving"></label><label class="field-label field-full">Description<textarea data-sample="${i}.description" placeholder="What did you build, and what did you learn?">${esc(x.description)}</textarea></label><label class="field-label field-full">Reflection<textarea data-sample="${i}.reflection" placeholder="What did this project teach you?">${esc(x.reflection)}</textarea></label><label class="field-label field-full">Optional link<input data-sample="${i}.link" value="${esc(x.link)}" placeholder="https://..."></label></div>${fileUpload("sample" + i, "Attach work sample", "samples." + i)}</div>`).join("")}<button class="add-button" data-add="sample">+ Add work sample</button></section>`
+    `${state.samples.length < 5 ? '<div class="warning"><strong>Add ' + (5 - state.samples.length) + " more work sample" + (5 - state.samples.length === 1 ? "" : "s") + " to meet the requirement.</strong></div>" : ""}<section class="section-card">${state.samples.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Work sample ${i + 1}</strong><button class="remove-button" data-remove-sample="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-sample="${i}.title" value="${esc(x.title)}" placeholder="e.g. Java Calculator"></label><label class="field-label">Date<input data-sample="${i}.date" value="${esc(x.date)}" placeholder="Month, year"></label><label class="field-label">Class / project<input data-sample="${i}.classOrProject" value="${esc(x.classOrProject)}" placeholder="e.g. Programming II"></label><label class="field-label">Skills demonstrated<input data-sample="${i}.skills" value="${esc(Array.isArray(x.skills) ? x.skills.join(", ") : x.skills)}" placeholder="Java, problem solving"></label><label class="field-label field-full">Description<textarea data-sample="${i}.description" placeholder="What did you build, and what did you learn?">${esc(x.description)}</textarea></label><label class="field-label field-full">Reflection<textarea data-sample="${i}.reflection" placeholder="What did this project teach you?">${esc(x.reflection)}</textarea></label><label class="field-label field-full">Optional link<input data-sample="${i}.link" value="${esc(x.link)}" placeholder="https://..."></label></div>${fileUpload("sample" + i, "Attach work sample", "samples." + i + ".file")}</div>`).join("")}<button class="add-button" data-add="sample">+ Add work sample</button></section>`
   );
 }
 function credentialsView() {
@@ -988,6 +996,14 @@ function bindEditor() {
         updateProgress();
       }),
   );
+  document.querySelectorAll("[data-academic-description]").forEach(
+    (el) =>
+      (el.oninput = () => {
+        const key = el.dataset.academicDescription;
+        state.supportingAcademics.documents[key].description = el.value;
+        save(true);
+      }),
+  );
   document.querySelectorAll("[data-entry]").forEach(
     (el) =>
       (el.oninput = () => {
@@ -1045,9 +1061,6 @@ function bindEditor() {
         updateProgress();
       }),
   );
-  document
-    .querySelectorAll("[data-file]")
-    .forEach((el) => (el.onchange = () => handleFile(el)));
   document
     .querySelectorAll("[data-remove-file]")
     .forEach((el) => (el.onclick = () => removeFile(el.dataset.removeFile)));
@@ -1210,78 +1223,6 @@ function removeFile(path) {
   save(true);
   render();
 }
-function preview() {
-  const s = state.student;
-  const sampleHtml = state.samples
-    .map(
-      (x, i) =>
-        `<div class="preview-item"><h3>${i + 1}. ${esc(x.title || "Untitled work sample")}</h3><p>${esc(x.description || "No description added yet.")}</p><small>${esc(x.classOrProject)} · ${esc(Array.isArray(x.skills) ? x.skills.join(", ") : x.skills)}</small></div>`,
-    )
-    .join("");
-  $("#preview-content").innerHTML =
-    `<div class="print-cover"><div><div class="preview-brand">ECTS · CAREER PORTFOLIO</div><h1>${esc(s.name || "Your Name")}<br><span>${esc(s.goal || "Future-ready professional")}</span></h1><p>${esc(s.bio || "Your introduction will appear here as you complete the About Me section.")}</p></div><div class="preview-meta"><span>PROGRAM<br><strong>Programming</strong></span><span>GRADUATION<br><strong>${esc(s.year)}</strong></span></div></div><h2>Table of contents</h2><div class="preview-toc">${["About Me", "Hiring Documents", "Work Samples", "Industry Credentials", "Accomplishments", "Supporting Academics", "CEW Standards", "Attached Files"].map((x, i) => `<div><span>${String(i + 1).padStart(2, "0")} · ${x}</span><span>${i + 3}</span></div>`).join("")}</div><h2>About me</h2><p>${esc(s.bio || "Add a biography in the editor.")}</p><h3>Skills</h3><p>${esc(s.skills || "Add your skills in the editor.")}</p><h3>Interests</h3><p>${esc(s.interests || "Add your interests in the editor.")}</p><h2>Work samples</h2>${sampleHtml || "<p>No work samples added yet.</p>"}<h2>Accomplishments</h2><p>${esc(
-      (state.accomplishments.accomplishments || [])
-        .map((x) => x.title || x)
-        .filter(Boolean)
-        .join(" · ") || "Add accomplishments in the editor.",
-    )}</p><h2>Supporting academics</h2><h3>Post-secondary plan</h3><p>${esc(state.academics.postSecondary || "Add your plan in the editor.")}</p><h3>Growth reflection</h3><p>${esc(state.academics.growth || "Add your reflection in the editor.")}</p><h2>CEW standards</h2>${state.cew.map((x, i) => `<div class="preview-item"><h3>${["13.1 Career Awareness & Exploration", "13.2 Employability Skills", "13.3 Growth & Advancement", "13.4 Personal Interests & Career Planning"][i]}</h3><p>${esc(x.description || "Evidence explanation not added yet.")}</p></div>`).join("")}<h2>Attached files</h2><div class="attachment-preview-list"><p>Loading attached files…</p></div><div class="preview-footer">ECTS Career Portfolio Creator · ${esc(s.name || "Student")} · Programming</div>`;
-  $("#preview-modal").classList.remove("hidden");
-  renderPreviewAttachments();
-}
-async function renderPreviewAttachments() {
-  const container = $("#preview-content .attachment-preview-list");
-  if (!container) return;
-  const attachments = [];
-  const seenObjects = new Set();
-  const seenRefs = new Set();
-  const visit = (value) => {
-    if (!value || typeof value !== "object" || seenObjects.has(value)) return;
-    seenObjects.add(value);
-    if (typeof value.fileRef === "string" && !seenRefs.has(value.fileRef)) {
-      seenRefs.add(value.fileRef);
-      attachments.push(value);
-    }
-    for (const child of Object.values(value)) visit(child);
-  };
-  visit(state);
-  if (!attachments.length) {
-    container.innerHTML =
-      "<p>No files have been attached to this portfolio yet.</p>";
-    return;
-  }
-  const store = portfolioStore();
-  if (!store) {
-    container.innerHTML = attachments
-      .map((file) => `<p>${esc(file.fileName || "Attached file")}</p>`)
-      .join("");
-    return;
-  }
-  container.innerHTML = "";
-  for (const file of attachments) {
-    const card = document.createElement("section");
-    card.className = "attachment-preview";
-    card.innerHTML = `<h3>${esc(file.fileName || "Attached file")}</h3><p>${esc(file.fileType || "File")}</p>`;
-    container.append(card);
-    if (
-      (file.fileType || "").toLowerCase().includes("pdf") ||
-      /\.pdf$/i.test(file.fileName || "")
-    ) {
-      try {
-        const content = await store.readFile(file.fileRef);
-        const frame = document.createElement("iframe");
-        frame.className = "attachment-pdf";
-        frame.title = file.fileName || "Attached PDF";
-        frame.src = `data:application/pdf;base64,${content.base64}`;
-        card.append(frame);
-      } catch {
-        const note = document.createElement("p");
-        note.textContent =
-          "This PDF could not be loaded from the app data folder.";
-        card.append(note);
-      }
-    }
-  }
-}
 function closePreview() {
   $("#preview-modal").classList.add("hidden");
 }
@@ -1332,6 +1273,7 @@ function academicDocument(key, title) {
     (state.supportingAcademics.documents[key] = {
       id: id("academic"),
       title,
+      description: "",
       fileName: "",
       fileType: "",
       fileData: null,
@@ -1341,7 +1283,7 @@ function academicDocument(key, title) {
 }
 function academicUpload(key, title) {
   const item = academicDocument(key, title);
-  return `<section class="section-card"><div class="repeater-header"><div><h2>${title}</h2><p>Upload the completed assignment as a PDF from your past work.</p></div><span class="requirement-status ${item.fileName ? "done" : ""}">${item.fileName ? "Attached" : "PDF required"}</span></div>${fileUpload("", item.fileName ? "Replace PDF" : "Upload PDF", "supportingAcademics.documents." + key)}</section>`;
+  return `<section class="section-card"><div class="repeater-header"><div><h2>${title}</h2><p>Describe the evidence and attach its PDF, DOC, or DOCX file.</p></div><span class="requirement-status ${item.fileName ? "done" : ""}">${item.fileName ? "Attached" : "Document required"}</span></div><label class="field-label">Description<textarea data-academic-description="${key}" placeholder="Describe the academic evidence and what it demonstrates.">${esc(item.description)}</textarea></label>${fileUpload("", item.fileName ? "Replace document" : "Upload document", "supportingAcademics.documents." + key)}</section>`;
 }
 function careerSafeView() {
   const choices = [
@@ -1379,7 +1321,7 @@ function academicsView() {
     heading(
       "08 · Look ahead",
       "Supporting academics",
-      "Keep completed academic assignments here as PDFs so you can return to them later.",
+      "Keep completed academic assignments here as PDF, DOC, or DOCX files so you can return to them later.",
     ) +
     academicUpload("postSecondary", "Post-secondary plan") +
     academicUpload("growth", "Co-op / SkillsUSA / ECTS growth reflection") +
@@ -1461,11 +1403,17 @@ function addPortableBindings() {
 async function portableFileHandler(el) {
   const file = el.files[0];
   if (!file) return;
-  if (
-    file.type !== "application/pdf" &&
-    el.dataset.file.startsWith("supportingAcademics")
-  ) {
-    toast("Supporting academic assignments must be PDF files.");
+  const extension = (file.name || "").toLowerCase().split(".").pop();
+  const isProfileImage = el.dataset.file === "student.image";
+  const allowedExtensions = isProfileImage
+    ? ["jpg", "jpeg", "png", "gif", "webp"]
+    : ["pdf", "doc", "docx", "jpg", "jpeg", "png", "gif", "webp"];
+  if (!allowedExtensions.includes(extension)) {
+    toast(
+      isProfileImage
+        ? "Choose a PNG, JPG, JPEG, GIF, or WEBP image."
+        : "Choose a PDF, DOC, DOCX, or image file.",
+    );
     return;
   }
   const store = portfolioStore();
@@ -1488,7 +1436,7 @@ async function portableFileHandler(el) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const metadata = await store.saveFile({
       fileName: file.name,
-      fileType: file.type,
+      fileType: file.type || getMimeType(extension),
       bytes,
       previousRef: existing?.fileRef || "",
     });
@@ -1499,10 +1447,23 @@ async function portableFileHandler(el) {
     else target[key] = metadata;
     save(true);
     render();
-    toast("File saved in the app data folder.");
-  } catch {
-    toast("The file could not be saved on this device.");
+    toast(`${file.name} saved in the app data folder.`);
+  } catch (error) {
+    toast(error.message || "The file could not be saved on this device.");
   }
+}
+function getMimeType(extension) {
+  const types = {
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+  };
+  return types[extension] || "application/octet-stream";
 }
 async function downloadBackup() {
   const store = portfolioStore();
@@ -1651,11 +1612,23 @@ if (store) {
     .catch(() => toast("Unable to load the saved portfolio from this device."));
 }
 
+function qrForLink(link) {
+  if (!link || !/^https?:\/\//i.test(link)) return "";
+  try {
+    const qr = window.qrcode(0, "L");
+    qr.addData(link);
+    qr.make();
+    return `<div class="work-link-qr"><span>Scan this link</span>${qr.createImgTag(4, 2, "QR code for work sample link")}</div>`;
+  } catch {
+    return "";
+  }
+}
+
 function previewAttachment(value, label) {
   const file =
     value && typeof value === "object" && "file" in value ? value.file : value;
   if (!file || typeof file !== "object" || !file.fileRef) return "";
-  return `<section class="attachment-preview" data-preview-file="${esc(file.fileRef)}" data-file-name="${esc(file.fileName || "Attached file")}" data-file-type="${esc(file.fileType || "")}"><h3>${esc(label || file.fileName || "Attached file")}</h3><p class="attachment-file-name">${esc(file.fileName || "Attached file")}</p><div class="document-renderer" aria-label="Preview of ${esc(file.fileName || "attached file")}"><p>Loading document…</p></div></section>`;
+  return `<section class="attachment-preview" data-preview-file="${esc(file.fileRef)}" data-file-name="${esc(file.fileName || "")}" data-file-type="${esc(file.fileType || "")}"><p class="attachment-reference">See the following pages for the supporting evidence.</p><div class="document-renderer" aria-label="Attached document preview"><p>Loading document…</p></div></section>`;
 }
 
 function preview() {
@@ -1668,12 +1641,12 @@ function preview() {
   const safety = state.careerSafe?.entries || [];
   const standards = Object.values(state.cewStandards || {});
   const documentSection = [
-    ["Cover letter", docs.coverLetter],
-    ["Resume", docs.resume],
-    ["Standard application", docs.standardApplication],
+    ["Cover letter", docs.coverLetter?.file],
+    ["Resume", docs.resume?.file],
+    ["Standard application", docs.standardApplication?.file],
     ...(state.recommendations || []).map((item, index) => [
       `Recommendation ${index + 1}`,
-      item,
+      item.file,
     ]),
   ]
     .map(([label, value]) => previewAttachment(value, label))
@@ -1681,7 +1654,7 @@ function preview() {
   const sampleSection = samples
     .map(
       (item, index) =>
-        `<div class="preview-item"><h3>${index + 1}. ${esc(item.title || "Untitled work sample")}</h3><p>${esc(item.description || "")}</p>${previewAttachment(item.file, item.title || "Work sample attachment")}</div>`,
+        `<div class="preview-item"><h3>${index + 1}. ${esc(item.title || "Work sample")}</h3><p>${esc(item.description || "")}</p>${item.link ? `<a class="work-sample-link" href="${esc(item.link)}" target="_blank" rel="noopener noreferrer">Open project link</a>` : ""}${qrForLink(item.link)}${previewAttachment(item.file, "Work sample attachment")}</div>`,
     )
     .join("");
   const credentialSection = credentials
@@ -1706,8 +1679,9 @@ function preview() {
     )
     .join("");
   const academicSection = Object.entries(academicFiles)
-    .map(([key, item]) =>
-      previewAttachment(item, key.replace(/([A-Z])/g, " $1")),
+    .map(
+      ([key, item]) =>
+        `<div class="preview-item"><p>${esc(item.description || "")}</p>${previewAttachment(item, "Supporting academic evidence")}</div>`,
     )
     .join("");
   const cewSection = standards
@@ -1727,8 +1701,9 @@ function preview() {
     ["preview-cew", "CEW standards"],
   ];
   const toc = `<section class="preview-toc-section"><h2>Table of contents</h2><div class="preview-toc">${tocItems.map(([target, label]) => `<div><span>${esc(label)}</span><span data-page-for="${target}">—</span></div>`).join("")}</div></section>`;
+  const profileImage = s.image || s.profileImage;
   $("#preview-content").innerHTML =
-    `<div class="print-cover"><div><div class="preview-brand">ECTS · CAREER PORTFOLIO</div><h1>${esc(s.name || "Your Name")}<br><span>${esc(s.goal || "Future-ready professional")}</span></h1><p>${esc(s.bio || "")}</p></div><div class="preview-meta"><span>PROGRAM<br><strong>${esc(state.program?.name || "Type your program")}</strong></span><span>GRADUATION<br><strong>${esc(s.year || "")}</strong></span></div></div>${toc}<h2 id="preview-about">About me</h2><p>${esc(s.bio || "Add a biography in the editor.")}</p><h3>Skills</h3><p>${esc(s.skills || "")}</p>${previewAttachment(s.profileImage, "Profile image")}<h2 id="preview-hiring-documents">Hiring documents</h2>${documentSection || "<p>No hiring documents attached.</p>"}<h2 id="preview-work-samples">Work samples</h2>${sampleSection || "<p>No work samples added yet.</p>"}<h2 id="preview-credentials">Industry credentials</h2>${credentialSection || "<p>No credentials added yet.</p>"}<h2 id="preview-accomplishments">Accomplishments</h2>${accomplishmentSection || "<p>No attachments in this section.</p>"}<h2 id="preview-careersafe">CareerSafe</h2>${safetySection || "<p>No CareerSafe certificates attached.</p>"}<h2 id="preview-academics">Supporting academics</h2>${academicSection || "<p>No academic PDFs attached.</p>"}<h2 id="preview-cew">CEW standards</h2>${cewSection || "<p>No CEW evidence attached.</p>"}<div class="preview-footer">ECTS Career Portfolio Creator · ${esc(s.name || "Student")} · ${esc(state.program?.name || "Type your program")}</div>`;
+    `<div class="print-cover"><div><div class="preview-brand">ECTS · CAREER PORTFOLIO</div><h1>${esc(s.name || "Your Name")}<br><span>${esc(s.goal || "Future-ready professional")}</span></h1><p>${esc(s.bio || "")}</p></div><div class="preview-meta"><span>PROGRAM<br><strong>${esc(state.program?.name || "Type your program")}</strong></span><span>GRADUATION<br><strong>${esc(s.year || "")}</strong></span></div></div>${toc}<h2 id="preview-about">About me</h2><p>${esc(s.bio || "Add a biography in the editor.")}</p><h3>Skills</h3><p>${esc(s.skills || "")}</p>${previewAttachment(profileImage, "Profile image")}<h2 id="preview-hiring-documents">Hiring documents</h2>${documentSection || "<p>No hiring documents attached.</p>"}<h2 id="preview-work-samples">Work samples</h2>${sampleSection || "<p>No work samples added yet.</p>"}<h2 id="preview-credentials">Industry credentials</h2>${credentialSection || "<p>No credentials added yet.</p>"}<h2 id="preview-accomplishments">Accomplishments</h2>${accomplishmentSection || "<p>No attachments in this section.</p>"}<h2 id="preview-careersafe">CareerSafe</h2>${safetySection || "<p>No CareerSafe certificates attached.</p>"}<h2 id="preview-academics">Supporting academics</h2>${academicSection || "<p>No academic PDFs attached.</p>"}<h2 id="preview-cew">CEW standards</h2>${cewSection || "<p>No CEW evidence attached.</p>"}<div class="preview-footer">ECTS Career Portfolio Creator · ${esc(s.name || "Student")} · ${esc(state.program?.name || "Type your program")}</div>`;
   wrapPreviewSections();
   $("#preview-modal").classList.remove("hidden");
   updatePreviewTocPageNumbers();
