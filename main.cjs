@@ -105,7 +105,13 @@ async function createWindow() {
     width: 1440, height: 960, minWidth: 900, minHeight: 650,
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, 'preload.cjs') }
   });
-  window.loadURL('ects://app/index%201.html');
+  window.webContents.on('console-message', (_, level, message) => {
+    if (level >= 1) console.error('[Renderer]', message);
+  });
+  window.webContents.on('render-process-gone', (_, details) => {
+    console.error('[Renderer] Render process gone:', details.reason);
+  });
+  window.loadFile(path.join(__dirname, 'index 1.html'));
 }
 
 app.whenReady().then(() => {
