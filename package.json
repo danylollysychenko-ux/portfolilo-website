@@ -8,26 +8,32 @@
     "package": "electron-builder --win portable"
   },
   "devDependencies": {
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "electron": "^44.5.1"
   },
   "build": {
     "appId": "org.ects.careerportfolio",
     "productName": "ECTS Career Portfolio",
+    "win": {
+      "signAndEditExecutable": false
+    },
     "files": [
       "index 1.html",
       "style.css",
       "script.js",
+      "export.html",
+      "preview.html",
+      "preview.css",
+      "preview.js",
       "document-preview.js",
+      "export-final.js",
       "main.cjs",
       "preload.cjs",
       "package.json"
     ]
   },
   "dependencies": {
-    "docx-preview": "^0.4.1",
-    "electron": "^44.5.1",
     "pdfjs-dist": "^6.4.299",
-    "qrcode": "^1.5.4",
-    "qrcode-generator": "^1.5.2"
+    "docx-preview": "^0.4.1"
   }
 }

@@ -234,15 +234,6 @@
       .board-demo-button {
         color: #075b49;
       }
-      .preview-mode-label {
-        display: inline-block;
-        margin-right: 14px;
-        color: #08745c;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
       .board-summary {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -515,208 +506,6 @@
         .header-actions .button-outline[data-action="download"]:before {
           content: "↓";
         }
-        .header-actions .button-outline[data-action="load"]:before {
-          content: "↑";
-        }
-        .header-actions .button-outline[data-action="preview"] {
-          display: none;
-        }
-      }
-      .attachment-preview {
-        border: 1px solid var(--line);
-        padding: 18px;
-        margin: 18px 0;
-        break-inside: avoid;
-      }
-      .attachment-preview h3 {
-        margin-top: 0;
-      }
-      .attachment-preview iframe {
-        display: block;
-        width: 100%;
-        height: 900px;
-        border: 1px solid var(--line);
-        background: #f4f7f8;
-      }
-      .attachment-reference {
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-      }
-      .attachment-preview-list > p {
-        color: var(--muted);
-      }
-      .document-renderer {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 14px;
-        margin-top: 14px;
-        overflow: visible;
-        background: #edf0ef;
-        padding: 14px;
-      }
-      .pdf-page {
-        display: block;
-        max-width: 100%;
-        height: auto;
-        box-shadow: 0 2px 12px #0002;
-        background: #fff;
-      }
-      .document-renderer .docx-wrapper {
-        width: 100%;
-        padding: 0;
-        background: transparent;
-      }
-      .document-renderer .docx-wrapper > .docx {
-        margin: 0 auto 14px;
-        max-width: 100%;
-        box-shadow: 0 2px 12px #0002;
-      }
-      .attachment-image {
-        display: block;
-        max-width: 100%;
-        height: auto;
-        margin: auto;
-      }
-      .document-preview-error {
-        width: 100%;
-        padding: 15px;
-        background: #fff4ed;
-        color: #873b28;
-      }
-      .attachment-file-name {
-        margin: 0;
-        color: var(--muted);
-      }
-      .modal-toolbar {
-        position: sticky;
-        top: 0;
-        z-index: 30;
-        backdrop-filter: blur(12px);
-      }
-      .preview-paper {
-        position: relative;
-        padding: 65px;
-        background: #fff;
-      }
-      .preview-page-divider {
-        position: absolute;
-        left: 0;
-        right: 0;
-        height: 0;
-        border-top: 1px solid #bdc7c5;
-        box-shadow: 0 5px 0 #eef1f0;
-        pointer-events: none;
-        z-index: 5;
-      }
-      .print-cover {
-        height: 960px;
-        min-height: 960px;
-      }
-      .preview-toc-section {
-        height: 960px;
-        min-height: 960px;
-        box-sizing: border-box;
-        break-after: page;
-      }
-      .preview-toc-section h2 {
-        margin-top: 35px;
-      }
-      .preview-section {
-        display: flow-root;
-        break-before: page;
-        break-inside: auto;
-      }
-      .preview-section h2 {
-        margin-top: 0;
-        break-after: avoid;
-      }
-      @media (max-width: 850px) {
-        .preview-paper {
-          padding: 45px 30px;
-        }
-      }
-      @media print {
-        @page {
-          size: letter;
-          margin: 0.5in;
-        }
-        body {
-          margin: 0;
-          background: #fff;
-        }
-        .modal {
-          position: static;
-          overflow: visible;
-          background: #fff;
-        }
-        .modal-toolbar {
-          display: none;
-        }
-        .preview-paper {
-          width: 100%;
-          margin: 0;
-          padding: 0;
-          box-shadow: none;
-          background: #fff;
-        }
-        .preview-page-divider {
-          display: none;
-        }
-        .print-cover {
-          height: 10in;
-          min-height: 10in;
-          break-after: page;
-        }
-        .preview-toc-section {
-          height: 10in;
-          min-height: 10in;
-          break-after: page;
-        }
-        .preview-section {
-          break-before: page;
-        }
-        .preview-section h2 {
-          margin-top: 0;
-          break-after: avoid;
-        }
-        .preview-paper h2 {
-          break-before: auto;
-        }
-        .preview-paper h2:first-of-type {
-          break-before: auto;
-        }
-        .preview-item,
-        .attachment-preview,
-        .preview-toc-section {
-          break-inside: auto;
-        }
-        .attachment-preview {
-          min-height: 10in;
-          break-after: page;
-        }
-        .work-link-qr {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-top: 8px;
-          color: var(--muted);
-          font-size: 10px;
-          text-transform: uppercase;
-        }
-        .work-link-qr img {
-          width: 70px;
-          height: 70px;
-          background: #fff;
-        }
-        .pdf-page {
-          break-inside: avoid;
-        }
-        .preview-footer {
-          position: static;
-        }
       }
     </style>
   </head>
@@ -886,6 +675,12 @@
             <span id="save-status" class="save-status">Not saved</span
             ><button
               class="button button-outline"
+              data-action="preview"
+              title="Preview your portfolio in a new window"
+            >
+              Preview</button
+            ><button
+              class="button button-outline"
               data-action="download"
               title="Save portfolio as an ECTS file"
             >
@@ -903,9 +698,6 @@
               aria-label="Save progress"
             >
               ↓</button
-            ><button class="button button-outline" data-action="preview">
-              Preview <span aria-hidden="true">↗</span>
-            </button>
           </div>
         </div>
       </header>
@@ -932,31 +724,8 @@
       </div>
     </div>
 
-    <div
-      id="preview-modal"
-      class="modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="preview-title"
-    >
-      <div class="modal-toolbar">
-        <button class="button button-quiet" data-action="close-modal">
-          ← Back to editor
-        </button>
-        <div>
-          <span id="preview-mode" class="preview-mode-label"></span
-          ><button class="button button-outline" data-action="print">
-            Export / Print PDF <span aria-hidden="true">↗</span>
-          </button>
-        </div>
-      </div>
-      <article id="preview-content" class="preview-paper"></article>
-    </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="node_modules/jszip/dist/jszip.min.js"></script>
-    <script src="node_modules/docx-preview/dist/docx-preview.min.js"></script>
-    <script src="node_modules/qrcode-generator/qrcode.js"></script>
-    <script type="module" src="document-preview.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About Me Preview</title>
+    <link rel="stylesheet" href="preview.css" />
+    <script src="./node_modules/jszip/dist/jszip.min.js"></script>
+    <script src="./node_modules/docx-preview/dist/docx-preview.min.js"></script>
+    <script type="module" src="preview.js"></script>
+  </head>
+  <body>
+    <div class="toolbar">
+      <span>Portfolio preview <span class="divider">/</span> About Me</span>
+      <button type="button" id="print-button">Print Preview</button>
+    </div>
+    <section class="sheet contents-sheet" id="table-of-contents" aria-labelledby="contents-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Contents</p>
+      <header class="contents-heading">
+        <p class="label">Your portfolio, at a glance</p>
+        <h1 id="contents-title">Table of Contents</h1>
+        <p class="contents-intro">A guide to the sections in this portfolio.</p>
+      </header>
+      <nav aria-label="Portfolio table of contents">
+        <ol class="contents-list" id="contents-list"></ol>
+      </nav>
+      <footer><span id="contents-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <main class="sheet about-sheet" id="about-me" aria-live="polite">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> About Me</p>
+      <header class="intro">
+        <div class="monogram" id="monogram" aria-hidden="true">—</div>
+        <div>
+          <p class="label">Introducing</p>
+          <h1 id="name">Your name</h1>
+          <p class="goal" id="goal"></p>
+          <p class="meta" id="meta"></p>
+        </div>
+      </header>
+      <section id="biography-section" class="section">
+        <h2>A little about me</h2>
+        <p id="biography" class="body-copy"></p>
+      </section>
+      <div class="details">
+        <section id="skills-section" class="section detail-section">
+          <h2>Skills</h2>
+          <ul id="skills" class="chips"></ul>
+        </section>
+        <section id="interests-section" class="section detail-section">
+          <h2>Interests</h2>
+          <ul id="interests" class="chips"></ul>
+        </section>
+      </div>
+      <section id="additional-section" class="section additional hidden">
+        <h2>Additional information</h2>
+        <p id="additional" class="body-copy"></p>
+      </section>
+      <footer><span id="footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </main>
+    <section class="sheet documents-sheet" id="hiring-documents" aria-labelledby="documents-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Documents</p>
+      <header class="documents-heading">
+        <p class="label">Section 02 · Ready for opportunity</p>
+        <h1 id="documents-title">Hiring Documents</h1>
+        <p class="contents-intro">Application materials, presented in a clean, print-ready layout.</p>
+      </header>
+      <div class="document-list" id="document-list"></div>
+      <footer><span id="documents-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <section class="sheet work-samples-sheet" id="work-samples" aria-labelledby="work-samples-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Projects</p>
+      <header class="documents-heading">
+        <p class="label">Section 03 Â· Skills in action</p>
+        <h1 id="work-samples-title">Work Samples</h1>
+        <p class="contents-intro">Selected projects and examples of work.</p>
+      </header>
+      <div class="work-sample-list" id="work-sample-list"></div>
+      <footer><span id="work-samples-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <section class="sheet credentials-sheet" id="industry-credentials" aria-labelledby="credentials-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Credentials</p>
+      <header class="documents-heading">
+        <p class="label">Section 04 Â· Skills recognized</p>
+        <h1 id="credentials-title">Industry Credentials</h1>
+        <p class="contents-intro">Certifications and training that recognize your skills.</p>
+      </header>
+      <div class="credential-list" id="credential-list"></div>
+      <footer><span id="credentials-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <section class="sheet accomplishments-sheet" id="accomplishments" aria-labelledby="accomplishments-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Achievements</p>
+      <header class="documents-heading">
+        <p class="label">Section 05 Â· Your momentum</p>
+        <h1 id="accomplishments-title">Accomplishments</h1>
+        <p class="contents-intro">Recognition, milestones, and ways you have contributed.</p>
+      </header>
+      <div class="accomplishment-list" id="accomplishment-list"></div>
+      <footer><span id="accomplishments-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <section class="sheet careersafe-sheet" id="careersafe" aria-labelledby="careersafe-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Certifications</p>
+      <header class="documents-heading">
+        <p class="label">Section 06 Â· CareerSafe</p>
+        <h1 id="careersafe-title">CareerSafe Certifications</h1>
+        <p class="contents-intro">Completed training and the certifications you have earned.</p>
+      </header>
+      <div class="careersafe-list" id="careersafe-list"></div>
+      <footer><span id="careersafe-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <section class="sheet academics-sheet" id="supporting-academics" aria-labelledby="academics-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Academics</p>
+      <header class="documents-heading">
+        <p class="label">Section 07 Â· Learning in practice</p>
+        <h1 id="academics-title">Supporting Academics</h1>
+        <p class="contents-intro">Academic work, reflections, and next steps beyond the classroom.</p>
+      </header>
+      <div class="academics-list" id="academics-list"></div>
+      <footer><span id="academics-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <section class="sheet cew-sheet" id="cew-standards" aria-labelledby="cew-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Career Education</p>
+      <header class="documents-heading">
+        <p class="label">Section 08 Â· Future ready</p>
+        <h1 id="cew-title">CEW Standards</h1>
+        <p class="contents-intro">How your portfolio demonstrates career exploration, employability, and growth.</p>
+      </header>
+      <div class="cew-list" id="cew-list"></div>
+      <footer><span id="cew-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+  </body>
+</html>

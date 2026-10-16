@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, protocol } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, protocol, shell } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const zlib = require("node:zlib");
@@ -20,6 +20,7 @@ const dataDirectory = () => path.join(app.getPath("userData"), "portfolio");
 const portfolioPath = () => path.join(dataDirectory(), "portfolio.json");
 const uploadsPath = () => path.join(dataDirectory(), "files");
 const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024;
+const PDF_MARGIN_INCHES = 0.75;
 
 function crc32(buffer) {
   let crc = 0xffffffff;
@@ -263,6 +264,192 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("portfolio:clear-current", async () =>
     fs.rm(dataDirectory(), { recursive: true, force: true }),
+  );
+  ipcMain.handle("portfolio:preview", async (_, portfolio, contents) => {
+    const student = portfolio.student || {};
+    const studentName = [student.firstName, student.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || student.displayName || "Student";
+    const previewData = structuredClone(portfolio);
+    previewData.tableOfContents = Array.isArray(contents) ? contents : [];
+    const documentReferences = new Map();
+    const documentRecords = [
+      portfolio.hiringDocuments?.coverLetter,
+      portfolio.hiringDocuments?.resume,
+      portfolio.hiringDocuments?.standardApplication,
+      portfolio.supportingAcademics?.documents?.employment,
+      ...Object.values(portfolio.supportingAcademics?.documents || {}),
+      ...(portfolio.recommendations || []),
+      ...(portfolio.workSamples || []),
+      ...(portfolio.credentials || []),
+      ...(portfolio.careerSafe?.entries || []),
+    ];
+    for (const record of documentRecords)
+      walkFileReferences(record, (file) => {
+        if (file.fileRef && safeFileId(file.fileRef))
+          documentReferences.set(file.fileRef, {
+            fileName: file.fileName || "Attached document",
+            fileType: file.fileType || "application/octet-stream",
+          });
+      });
+    const storedFiles = await fs.readdir(uploadsPath()).catch(() => []);
+    previewData.previewAttachments = {};
+    for (const [fileRef, metadata] of documentReferences) {
+      const storedName = storedFiles.find((candidate) =>
+        candidate.startsWith(`${fileRef}.`),
+      );
+      if (!storedName) continue;
+      const bytes = await fs.readFile(path.join(uploadsPath(), storedName));
+      previewData.previewAttachments[fileRef] = {
+        ...metadata,
+        base64: bytes.toString("base64"),
+      };
+    }
+    const profileImage = previewData.student?.profileImage;
+    if (profileImage?.fileRef && safeFileId(profileImage.fileRef)) {
+      const storedName = (await fs.readdir(uploadsPath()).catch(() => [])).find(
+        (candidate) => candidate.startsWith(`${profileImage.fileRef}.`),
+      );
+      if (storedName) {
+        const bytes = await fs.readFile(path.join(uploadsPath(), storedName));
+        profileImage.previewDataUrl = `data:${profileImage.fileType || "image/jpeg"};base64,${bytes.toString("base64")}`;
+      }
+    }
+    const previewWindow = new BrowserWindow({
+      width: 1000,
+      height: 850,
+      minWidth: 680,
+      minHeight: 600,
+      title: `${studentName} - Portfolio Preview`,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        preload: path.join(__dirname, "preload.cjs"),
+      },
+    });
+    previewWindow.on("page-title-updated", (event) => event.preventDefault());
+    await previewWindow.loadFile(path.join(__dirname, "preview.html"));
+    await previewWindow.webContents.executeJavaScript(`
+      window.__ABOUT_ME_DATA__ = ${JSON.stringify(previewData)};
+      window.dispatchEvent(new Event('about-me-data-ready'));
+    `);
+    return true;
+  });
+  ipcMain.handle("portfolio:print-preview", async (event) => {
+    const contents = event.sender;
+    if (contents.isDestroyed()) throw new Error("The preview window is closed.");
+    await contents.executeJavaScript(`Promise.all([
+      document.fonts?.ready || Promise.resolve(),
+      ...Array.from(document.images, (image) => image.decode().catch(() => {})),
+    ])`);
+    const pdf = await contents.printToPDF({
+      printBackground: true,
+      displayHeaderFooter: false,
+      pageSize: "Letter",
+      margins: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
+    const previewName = contents
+      .getTitle()
+      .replace(/\s*\|\s*About Me$/i, "")
+      .replace(/[<>:"/\\|?*]/g, "-")
+      .trim() || "Portfolio";
+    const pdfPath = path.join(
+      app.getPath("temp"),
+      `${previewName}-Print-Preview-${require("node:crypto").randomUUID()}.pdf`,
+    );
+    await fs.writeFile(pdfPath, pdf);
+    const openError = await shell.openPath(pdfPath);
+    if (openError) {
+      await fs.rm(pdfPath, { force: true }).catch(() => {});
+      throw new Error(`The PDF was created, but could not be opened: ${openError}`);
+    }
+    return true;
+  });
+  ipcMain.handle(
+    "portfolio:export-pdf",
+    async (_, portfolio, suggestedName) => {
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: "Save ECTS portfolio PDF",
+        defaultPath: `${suggestedName || "ects-career-portfolio"}.pdf`,
+        filters: [{ name: "PDF document", extensions: ["pdf"] }],
+      });
+      if (canceled || !filePath) return false;
+
+      const references = new Map();
+      walkFileReferences(portfolio, (record) => {
+        if (record.fileRef && !references.has(record.fileRef)) {
+          references.set(record.fileRef, {
+            fileName: record.fileName || "Attached document",
+            fileType: record.fileType || "application/octet-stream",
+          });
+        }
+      });
+      const storedNames = await fs.readdir(uploadsPath()).catch(() => []);
+      const attachments = {};
+      for (const [fileRef, metadata] of references) {
+        const storedName = storedNames.find((candidate) =>
+          candidate.startsWith(`${fileRef}.`),
+        );
+        if (!storedName) {
+          throw new Error(
+            `The attachment “${fileRef}” is missing from this computer.`,
+          );
+        }
+        const bytes = await fs.readFile(path.join(uploadsPath(), storedName));
+        attachments[fileRef] = {
+          ...metadata,
+          base64: bytes.toString("base64"),
+        };
+      }
+
+      const exportWindow = new BrowserWindow({
+        show: false,
+        width: 900,
+        height: 1200,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+        },
+      });
+      try {
+        await exportWindow.loadFile(path.join(__dirname, "export.html"));
+        await exportWindow.webContents.executeJavaScript(`
+        window.__EXPORT_DATA__ = ${JSON.stringify({
+          portfolio,
+          attachments,
+        })};
+        window.dispatchEvent(new Event('export-data-ready'));
+      `);
+        await exportWindow.webContents.executeJavaScript(
+          `new Promise((resolve, reject) => {
+            const started = Date.now();
+            const check = () => {
+              if (window.__EXPORT_READY__ === true) resolve();
+              else if (Date.now() - started > 60000) reject(new Error('Export renderer did not become ready.'));
+              else setTimeout(check, 50);
+            };
+            check();
+          })`,
+        );
+        const data = await exportWindow.webContents.printToPDF({
+          printBackground: true,
+          displayHeaderFooter: false,
+          pageSize: "Letter",
+          margins: {
+            top: 0.75,
+            right: 0.75,
+            bottom: 0.75,
+            left: 0.75,
+          },
+          preferCSSPageSize: true,
+        });
+        await fs.writeFile(filePath, Buffer.from(data));
+        return true;
+      } finally {
+        exportWindow.destroy();
+      }
+    },
   );
   ipcMain.handle(
     "portfolio:export-archive",

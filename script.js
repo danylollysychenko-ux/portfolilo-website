@@ -324,9 +324,18 @@ function addCompatibilityAliases(portfolio) {
     ["standardApplication", "standardApplication"],
   ])
     Object.defineProperty(documents, key, {
-      get: () => portfolio.hiringDocuments[documentKey].fileName,
+      get: () => {
+        const document = portfolio.hiringDocuments[documentKey];
+        const attachedFile = document?.file || document;
+        return attachedFile?.fileName || attachedFile?.name || "";
+      },
       set: (value) => {
-        portfolio.hiringDocuments[documentKey].fileName = value || "";
+        const document = portfolio.hiringDocuments[documentKey];
+        if (document?.file && typeof document.file === "object") {
+          document.file.fileName = value || "";
+        } else {
+          document.fileName = value || "";
+        }
       },
     });
   const academics = {};
@@ -512,7 +521,7 @@ function splitList(value) {
         .filter(Boolean);
 }
 function loadState() {
-  return addCompatibilityAliases(defaultState());
+  return addCompatibilityAliases(ensurePortableShape(defaultState()));
 }
 function save(silent = false) {
   try {
@@ -593,14 +602,12 @@ function startApp() {
 }
 function renderNav() {
   const nav = $("#section-nav");
-  nav.innerHTML =
-    navItems
-      .map(
-        ([id, label], i) =>
-          `<button class="nav-item ${current === id ? "active" : ""}" data-section="${id}"><span class="nav-number">${String(i + 1).padStart(2, "0")}</span><span>${label}</span>${isSectionDone(id) ? '<span class="nav-check">✓</span>' : ""}</button>`,
-      )
-      .join("") +
-    `<button class="nav-item" data-action="preview"><span class="nav-number">↗</span><span>Preview portfolio</span></button>`;
+  nav.innerHTML = navItems
+    .map(
+      ([id, label], i) =>
+        `<button class="nav-item ${current === id ? "active" : ""}" data-section="${id}"><span class="nav-number">${String(i + 1).padStart(2, "0")}</span><span>${label}</span>${isSectionDone(id) ? '<span class="nav-check">✓</span>' : ""}</button>`,
+    )
+    .join("");
   nav.querySelectorAll("[data-section]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -614,6 +621,8 @@ function renderNav() {
 function isSectionDone(id) {
   if (id === "about")
     return !!(state.student.name && state.student.goal && state.student.bio);
+  if (id === "checklist") return progress() >= 100;
+  if (id === "customize") return true;
   if (id === "samples") return state.samples.length >= 5;
   if (id === "documents")
     return !!(
@@ -705,47 +714,143 @@ function aboutView() {
     `<section class="section-card"><div class="field-grid"><label class="field-label">First name<input data-bind="student.firstName" value="${esc(s.firstName)}" placeholder="First name"></label><label class="field-label">Last name<input data-bind="student.lastName" value="${esc(s.lastName)}" placeholder="Last name"></label><label class="field-label">Program<input data-bind="program.name" value="${esc(state.program.customNameEntered ? state.program.name || "" : "")}" placeholder="Type your program"></label><label class="field-label">Graduation year<select data-bind="student.graduationYear"><option ${s.graduationYear === "2026" ? "selected" : ""}>2026</option><option ${s.graduationYear === "2027" ? "selected" : ""}>2027</option><option ${s.graduationYear === "2028" ? "selected" : ""}>2028</option><option ${s.graduationYear === "2029" ? "selected" : ""}>2029</option></select></label><label class="field-label">Career goal<input data-bind="aboutMe.careerGoal" value="${esc(state.aboutMe.careerGoal)}" placeholder="e.g. Software developer"></label><label class="field-label field-full">Short biography<textarea data-bind="aboutMe.biography" placeholder="Write a short introduction about yourself, your interests, and what you hope to do after graduation.">${esc(state.aboutMe.biography)}</textarea></label><label class="field-label">Skills<textarea data-bind="aboutMe.skills" placeholder="Java, problem solving, communication...">${esc(state.aboutMe.skills.join(", "))}</textarea></label><label class="field-label">Interests<textarea data-bind="aboutMe.interests" placeholder="What do you enjoy learning or doing?">${esc(state.aboutMe.interests.join(", "))}</textarea></label><label class="field-label field-full">Additional information<textarea data-bind="aboutMe.additionalInformation" placeholder="Anything else you want a reviewer to know.">${esc(state.aboutMe.additionalInformation)}</textarea></label></div></section><section class="section-card"><h2>Profile image</h2><p>Optional. Use a clear, professional image. It stays on this device.</p>${fileUpload("profile", "Choose image", "student.image")}</section>`
   );
 }
-function checklistView() {
-  const items = [
-    [
-      "About Me",
-      !!(state.student.name && state.student.goal && state.student.bio),
-      false,
-    ],
-    ["Table of Contents", true, false],
-    ["Cover Letter", !!state.files.cover, false],
-    ["Resume", !!state.files.resume, false],
-    ["Work Sample 1–5", state.samples.length >= 5, false],
-    ["Industry Credential", state.files.credentials.length > 0, false],
-    [
-      "Recommendation Letter 1–2",
-      (state.accomplishments.recommendations || []).length >= 2,
-      false,
-    ],
-    [
-      "CareerSafe 1–4",
-      state.careersafe.every((x) => x.choice && x.file),
-      false,
-    ],
-    [
-      "Supporting Academics",
-      !!(state.academics.postSecondary && state.academics.growth),
-      false,
-    ],
-    [
-      "CEW Standards",
-      state.cew.every((x) => x.selected.length && x.description),
-      false,
-    ],
-    ["Home School Reflection", !!state.academics.home, true],
+function portfolioChecklistItems() {
+  const hasText = (value) => typeof value === "string" && value.trim().length > 0;
+  const hasAttachment = (value) => {
+    if (typeof value === "string") return hasText(value);
+    if (!value || typeof value !== "object") return false;
+    if ("file" in value) return hasAttachment(value.file);
+    return Boolean(value.fileName || value.name || value.fileRef || value.fileData);
+  };
+  const studentName = [state.student.firstName, state.student.lastName]
+    .filter(hasText)
+    .join(" ") || state.student.displayName;
+  const aboutComplete = Boolean(
+    hasText(studentName) &&
+      hasText(state.aboutMe.careerGoal) &&
+      hasText(state.aboutMe.biography),
+  );
+  const academicDocuments = state.supportingAcademics.documents || {};
+  const requiredAcademicDocuments = [
+    ["postSecondary", "Post-secondary plan"],
+    ["growth", "Co-op / SkillsUSA / ECTS growth reflection"],
+    ["reflection1", "ATD / field trip reflection 1"],
+    ["reflection2", "ATD / field trip reflection 2"],
   ];
+  const otherAcademicDocuments = [
+    ["employment", "Standard application for employment", true],
+    ["employers", "Potential employers", true],
+    ["education", "Post-secondary education opportunities", true],
+    ["home", "Home school reflection", true],
+  ];
+  const samples = state.workSamples || [];
+  const sampleSlots = Math.max(5, samples.length);
+  const credentials = state.credentials || [];
+  const recommendations = state.recommendations || [];
+  const safeEntries = state.careerSafe.entries || [];
+  const standards = Object.values(state.cewStandards || {});
+  const accomplishments = [
+    ...(state.accomplishments.awards || []),
+    ...(state.accomplishments.accomplishments || []),
+    ...(state.accomplishments.extracurriculars || []),
+    ...(state.accomplishments.serviceExperiences || []),
+  ];
+  const items = [
+    { id: "about", label: "About Me", done: aboutComplete, group: "about", target: "about-me" },
+    { id: "contents", label: "Table of Contents", done: true, group: "contents", target: "table-of-contents" },
+    { id: "cover-letter", label: "Cover Letter", done: hasAttachment(state.hiringDocuments.coverLetter), group: "documents", target: "cover-letter" },
+    { id: "resume", label: "Resume", done: hasAttachment(state.hiringDocuments.resume), group: "documents", target: "resume" },
+    ...Array.from({ length: sampleSlots }, (_, index) => {
+      const sample = samples[index] || {};
+      return {
+        id: `work-sample-${index + 1}`,
+        label: `Work Sample ${index + 1}`,
+        done: hasText(sample.title) && (hasText(sample.description) || hasAttachment(sample.file)),
+        optional: index >= 5,
+        group: "samples",
+        target: "work-samples",
+      };
+    }),
+    ...(credentials.length
+      ? credentials.map((credential, index) => ({
+          id: `credential-${index + 1}`,
+          label: `Industry Credential ${index + 1}`,
+          done: hasText(credential.name) && (hasText(credential.description) || hasAttachment(credential.file)),
+          optional: index > 0,
+          group: "credentials",
+          target: "industry-credentials",
+        }))
+      : [{ id: "credential-1", label: "Industry Credential", done: false, group: "credentials", target: "industry-credentials" }]),
+    { id: "accomplishments", label: "Accomplishments", done: accomplishments.some((entry) => hasText(typeof entry === "string" ? entry : entry?.title)), group: "accomplishments", target: "accomplishments" },
+    ...Array.from({ length: Math.max(2, recommendations.length) }, (_, index) => ({
+      id: `recommendation-${index + 1}`,
+      label: `Recommendation Letter ${index + 1}`,
+      done: hasAttachment(recommendations[index]?.file || recommendations[index]),
+      optional: index >= 2,
+      group: "recommendations",
+      target: "recommendations",
+    })),
+    ...Array.from({ length: Math.max(4, safeEntries.length) }, (_, index) => ({
+      id: `careersafe-${index + 1}`,
+      label: `CareerSafe ${index + 1}`,
+      done: Boolean(safeEntries[index]?.selectedOption && hasAttachment(safeEntries[index]?.certificate)),
+      optional: index >= 4,
+      group: "careersafe",
+      target: "careersafe",
+    })),
+    ...requiredAcademicDocuments.map(([key, label]) => ({
+      id: `academic-${key}`,
+      label,
+      done: hasAttachment(academicDocuments[key]),
+      group: "academics",
+      target: "supporting-academics",
+    })),
+    ...otherAcademicDocuments.map(([key, label, optional = false]) => ({
+      id: `academic-${key}`,
+      label,
+      done: hasAttachment(academicDocuments[key]),
+      optional,
+      group: "academics-extra",
+      target: "supporting-academics",
+    })),
+    ...standards.map((standard) => ({
+      id: `cew-${standard.id}`,
+      label: `CEW ${standard.id} ${standard.title}`,
+      done: Boolean(standard.evidence?.length && hasText(standard.explanation)),
+      group: "cew",
+      target: "cew-standards",
+    })),
+  ];
+  return items;
+}
+function portfolioContents() {
+  return [
+    ["About Me", "about-me"],
+    ["Hiring Documents", "hiring-documents"],
+    ["Work Samples", "work-samples"],
+    ["Industry Credentials", "industry-credentials"],
+    ["Accomplishments", "accomplishments"],
+    ["Recommendation Letters", "recommendations"],
+    ["CareerSafe Certifications", "careersafe"],
+    ["Supporting Academics", "supporting-academics"],
+    ["CEW Standards", "cew-standards"],
+    ...(state.settings?.customSections || [])
+      .filter((section) => hasPortfolioText(section.title))
+      .map((section, index) => [section.title, `custom-section-${index + 1}`]),
+  ].map(([label, target]) => ({ label, target }));
+}
+function hasPortfolioText(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function checklistView() {
+  const items = portfolioChecklistItems();
   return (
     heading(
       "02 · Keep track",
       "Portfolio checklist",
       "A clear view of what is complete, what still needs attention, and what is optional.",
     ) +
-    `<section class="section-card"><div class="requirement-list">${items.map((x) => `<div class="requirement-row"><input type="checkbox" disabled ${x[1] ? "checked" : ""}><span>${x[0]}${x[2] ? " <small>(optional)</small>" : ""}</span><span class="requirement-status ${x[1] ? "done" : ""}">${x[1] ? "Complete" : x[2] ? "Optional" : "Missing"}</span></div>`).join("")}</div></section>${progress() < 100 ? '<div class="warning"><strong>Your portfolio is still in progress.</strong><br>You can export at any time, but completing the missing items will make your portfolio stronger.</div>' : ""}`
+    `<section class="section-card"><div class="requirement-list">${items.map((item) => `<div class="requirement-row"><input type="checkbox" disabled ${item.done ? "checked" : ""} aria-label="${item.done ? "Complete" : "Incomplete"}: ${esc(item.label)}"><span>${esc(item.label)}${item.optional ? " <small>(optional)</small>" : ""}</span><span class="requirement-status ${item.done ? "done" : ""}">${item.done ? "Complete" : item.optional ? "Optional" : "Missing"}</span></div>`).join("")}</div></section>${progress() < 100 ? '<div class="warning"><strong>Your portfolio is still in progress.</strong><br>You can export at any time, but completing the missing items will make your portfolio stronger.</div>' : ""}`
   );
 }
 function getPath(path) {
@@ -1223,9 +1328,6 @@ function removeFile(path) {
   save(true);
   render();
 }
-function closePreview() {
-  $("#preview-modal").classList.add("hidden");
-}
 function closeMenu() {
   $("#sidebar").classList.remove("open");
 }
@@ -1465,6 +1567,47 @@ function getMimeType(extension) {
   };
   return types[extension] || "application/octet-stream";
 }
+async function exportPdf() {
+  const store = portfolioStore();
+  if (!store) {
+    toast("PDF export is available in the desktop app.");
+    return;
+  }
+  const button = document.querySelector('[data-action="print"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Preparing PDF…";
+  }
+  try {
+    const name = (
+      state.student.displayName ||
+      state.student.firstName ||
+      "ects-career-portfolio"
+    )
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-");
+    if (await store.exportPdf(state, name)) toast("Portfolio PDF saved.");
+  } catch (error) {
+    toast(error.message || "The PDF could not be generated.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = 'Export / Print PDF <span aria-hidden="true">↗</span>';
+    }
+  }
+}
+async function previewPortfolio() {
+  const store = portfolioStore();
+  if (!store?.preview) {
+    toast("Portfolio preview is available in the desktop app.");
+    return;
+  }
+  try {
+    await store.preview(state, portfolioContents());
+  } catch (error) {
+    toast(error.message || "The portfolio preview could not be opened.");
+  }
+}
 async function downloadBackup() {
   const store = portfolioStore();
   if (!store) {
@@ -1514,50 +1657,34 @@ function reset() {
   }
 }
 state = ensurePortableShape(state);
+function checklistItemComplete(id) {
+  return portfolioChecklistItems().find((item) => item.id === id)?.done || false;
+}
+function checklistGroupComplete(group) {
+  const requiredItems = portfolioChecklistItems().filter(
+    (item) => item.group === group && !item.optional,
+  );
+  return requiredItems.length > 0 && requiredItems.every((item) => item.done);
+}
 isSectionDone = function (section) {
-  if (section === "academics")
-    return ["postSecondary", "growth", "reflection1", "reflection2"].every(
-      (key) => academicDocument(key, key).fileName,
-    );
+  if (section === "checklist") return progress() >= 100;
+  if (section === "customize") return true;
+  if (section === "about") return checklistGroupComplete("about");
+  if (section === "documents")
+    return ["cover-letter", "resume", "recommendation-1", "recommendation-2"].every(checklistItemComplete);
+  if (section === "samples")
+    return Array.from({ length: 5 }, (_, index) => checklistItemComplete(`work-sample-${index + 1}`)).every(Boolean);
+  if (section === "credentials") return checklistItemComplete("credential-1");
+  if (section === "accomplishments") return checklistItemComplete("accomplishments");
   if (section === "careersafe")
-    return state.careerSafe.entries
-      .slice(0, 4)
-      .every((item) => item.selectedOption && item.certificate);
-  return section === "about"
-    ? !!(state.student.name && state.student.goal && state.student.bio)
-    : section === "samples"
-      ? state.workSamples.length >= 5
-      : section === "credentials"
-        ? state.credentials.length > 0
-        : section === "accomplishments"
-          ? state.accomplishments.accomplishments.length > 0
-          : section === "documents"
-            ? !!(
-                state.files.cover &&
-                state.files.resume &&
-                state.files.recommendations.filter(Boolean).length >= 2
-              )
-            : section === "cew"
-              ? state.cew.every(
-                  (item) => item.selected.length && item.description,
-                )
-              : false;
+    return Array.from({ length: 4 }, (_, index) => checklistItemComplete(`careersafe-${index + 1}`)).every(Boolean);
+  if (section === "academics") return checklistGroupComplete("academics");
+  if (section === "cew") return checklistGroupComplete("cew");
+  return false;
 };
 progress = function () {
-  const checks = [
-    !!(state.student.name && state.student.goal && state.student.bio),
-    !!(
-      state.files.cover &&
-      state.files.resume &&
-      state.files.recommendations.filter(Boolean).length >= 2
-    ),
-    state.workSamples.length >= 5,
-    state.credentials.length > 0,
-    state.accomplishments.accomplishments.length > 0,
-    isSectionDone("careersafe"),
-    isSectionDone("academics"),
-    isSectionDone("cew"),
-  ];
+  const checks = ["about", "documents", "samples", "credentials", "accomplishments", "careersafe", "academics", "cew"]
+    .map(isSectionDone);
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 };
 addPortableBindings();
@@ -1572,11 +1699,10 @@ document.addEventListener("click", (e) => {
     closeMenu();
   }
   if (action === "save") save();
+  if (action === "preview") previewPortfolio();
   if (action === "download") downloadBackup();
   if (action === "load") loadBackup();
-  if (action === "preview") preview();
-  if (action === "close-modal") closePreview();
-  if (action === "print") window.print();
+  if (action === "print") exportPdf();
   if (action === "menu") $("#sidebar").classList.toggle("open");
   if (action === "requirements") {
     current = "checklist";
@@ -1610,206 +1736,6 @@ if (store) {
       else show("landing");
     })
     .catch(() => toast("Unable to load the saved portfolio from this device."));
-}
-
-function qrForLink(link) {
-  if (!link || !/^https?:\/\//i.test(link)) return "";
-  try {
-    const qr = window.qrcode(0, "L");
-    qr.addData(link);
-    qr.make();
-    return `<div class="work-link-qr"><span>Scan this link</span>${qr.createImgTag(4, 2, "QR code for work sample link")}</div>`;
-  } catch {
-    return "";
-  }
-}
-
-function previewAttachment(value, label) {
-  const file =
-    value && typeof value === "object" && "file" in value ? value.file : value;
-  if (!file || typeof file !== "object" || !file.fileRef) return "";
-  return `<section class="attachment-preview" data-preview-file="${esc(file.fileRef)}" data-file-name="${esc(file.fileName || "")}" data-file-type="${esc(file.fileType || "")}"><p class="attachment-reference">See the following pages for the supporting evidence.</p><div class="document-renderer" aria-label="Attached document preview"><p>Loading document…</p></div></section>`;
-}
-
-function preview() {
-  const s = state.student;
-  const samples = state.workSamples || [];
-  const credentials = state.credentials || [];
-  const docs = state.hiringDocuments || {};
-  const academicFiles = state.supportingAcademics?.documents || {};
-  const accomplishments = state.accomplishments || {};
-  const safety = state.careerSafe?.entries || [];
-  const standards = Object.values(state.cewStandards || {});
-  const documentSection = [
-    ["Cover letter", docs.coverLetter?.file],
-    ["Resume", docs.resume?.file],
-    ["Standard application", docs.standardApplication?.file],
-    ...(state.recommendations || []).map((item, index) => [
-      `Recommendation ${index + 1}`,
-      item.file,
-    ]),
-  ]
-    .map(([label, value]) => previewAttachment(value, label))
-    .join("");
-  const sampleSection = samples
-    .map(
-      (item, index) =>
-        `<div class="preview-item"><h3>${index + 1}. ${esc(item.title || "Work sample")}</h3><p>${esc(item.description || "")}</p>${item.link ? `<a class="work-sample-link" href="${esc(item.link)}" target="_blank" rel="noopener noreferrer">Open project link</a>` : ""}${qrForLink(item.link)}${previewAttachment(item.file, "Work sample attachment")}</div>`,
-    )
-    .join("");
-  const credentialSection = credentials
-    .map(
-      (item, index) =>
-        `<div class="preview-item"><h3>${esc(item.name || `Credential ${index + 1}`)}</h3><p>${esc([item.organization, item.date, item.description].filter(Boolean).join(" · "))}</p>${previewAttachment(item.file, item.name || "Credential attachment")}</div>`,
-    )
-    .join("");
-  const accomplishmentSection = Object.entries(accomplishments)
-    .filter(([, items]) => Array.isArray(items))
-    .flatMap(([kind, items]) =>
-      items.map(
-        (item, index) =>
-          `<div class="preview-item"><h3>${esc(item.title || item.name || `${kind} ${index + 1}`)}</h3><p>${esc(item.description || "")}</p>${previewAttachment(item.file, item.title || "Accomplishment attachment")}</div>`,
-      ),
-    )
-    .join("");
-  const safetySection = safety
-    .map(
-      (item, index) =>
-        `<div class="preview-item"><h3>${esc(item.selectedOption || `CareerSafe ${index + 1}`)}</h3><p>${esc(item.notes || "")}</p>${previewAttachment(item.certificate, item.selectedOption || "CareerSafe certificate")}</div>`,
-    )
-    .join("");
-  const academicSection = Object.entries(academicFiles)
-    .map(
-      ([key, item]) =>
-        `<div class="preview-item"><p>${esc(item.description || "")}</p>${previewAttachment(item, "Supporting academic evidence")}</div>`,
-    )
-    .join("");
-  const cewSection = standards
-    .map(
-      (item) =>
-        `<div class="preview-item"><h3>${esc(item.id || "")} ${esc(item.title || "")}</h3><p>${esc(item.explanation || "")}</p>${(item.evidence || []).map((evidence) => previewAttachment(evidence, evidence.title || "CEW evidence")).join("")}</div>`,
-    )
-    .join("");
-  const tocItems = [
-    ["preview-about", "About me"],
-    ["preview-hiring-documents", "Hiring documents"],
-    ["preview-work-samples", "Work samples"],
-    ["preview-credentials", "Industry credentials"],
-    ["preview-accomplishments", "Accomplishments"],
-    ["preview-careersafe", "CareerSafe"],
-    ["preview-academics", "Supporting academics"],
-    ["preview-cew", "CEW standards"],
-  ];
-  const toc = `<section class="preview-toc-section"><h2>Table of contents</h2><div class="preview-toc">${tocItems.map(([target, label]) => `<div><span>${esc(label)}</span><span data-page-for="${target}">—</span></div>`).join("")}</div></section>`;
-  const profileImage = s.image || s.profileImage;
-  $("#preview-content").innerHTML =
-    `<div class="print-cover"><div><div class="preview-brand">ECTS · CAREER PORTFOLIO</div><h1>${esc(s.name || "Your Name")}<br><span>${esc(s.goal || "Future-ready professional")}</span></h1><p>${esc(s.bio || "")}</p></div><div class="preview-meta"><span>PROGRAM<br><strong>${esc(state.program?.name || "Type your program")}</strong></span><span>GRADUATION<br><strong>${esc(s.year || "")}</strong></span></div></div>${toc}<h2 id="preview-about">About me</h2><p>${esc(s.bio || "Add a biography in the editor.")}</p><h3>Skills</h3><p>${esc(s.skills || "")}</p>${previewAttachment(profileImage, "Profile image")}<h2 id="preview-hiring-documents">Hiring documents</h2>${documentSection || "<p>No hiring documents attached.</p>"}<h2 id="preview-work-samples">Work samples</h2>${sampleSection || "<p>No work samples added yet.</p>"}<h2 id="preview-credentials">Industry credentials</h2>${credentialSection || "<p>No credentials added yet.</p>"}<h2 id="preview-accomplishments">Accomplishments</h2>${accomplishmentSection || "<p>No attachments in this section.</p>"}<h2 id="preview-careersafe">CareerSafe</h2>${safetySection || "<p>No CareerSafe certificates attached.</p>"}<h2 id="preview-academics">Supporting academics</h2>${academicSection || "<p>No academic PDFs attached.</p>"}<h2 id="preview-cew">CEW standards</h2>${cewSection || "<p>No CEW evidence attached.</p>"}<div class="preview-footer">ECTS Career Portfolio Creator · ${esc(s.name || "Student")} · ${esc(state.program?.name || "Type your program")}</div>`;
-  wrapPreviewSections();
-  $("#preview-modal").classList.remove("hidden");
-  updatePreviewTocPageNumbers();
-  renderPreviewAttachments();
-}
-
-function wrapPreviewSections() {
-  const paper = $("#preview-content");
-  const headings = [...paper.querySelectorAll('h2[id^="preview-"]')];
-  for (const heading of headings) {
-    const section = document.createElement("section");
-    section.className = "preview-section";
-    heading.before(section);
-    let node = heading;
-    while (
-      node &&
-      !(
-        (node !== heading && node.matches('h2[id^="preview-"]')) ||
-        node.matches(".preview-footer")
-      )
-    ) {
-      const next = node.nextSibling;
-      section.append(node);
-      node = next;
-    }
-  }
-}
-
-function updatePreviewTocPageNumbers() {
-  const paper = $("#preview-content");
-  const cover = paper?.querySelector(".print-cover");
-  if (!paper || !cover) return;
-  const pageHeight = 960;
-  const paperTop = paper.getBoundingClientRect().top;
-  const contentTop = parseFloat(getComputedStyle(paper).paddingTop) || 0;
-  paper
-    .querySelectorAll(".preview-page-divider")
-    .forEach((divider) => divider.remove());
-  let pageNumber = 3;
-  for (const section of paper.querySelectorAll(".preview-section")) {
-    section.style.minHeight = "";
-    const sectionPages = Math.max(
-      1,
-      Math.ceil(section.scrollHeight / pageHeight),
-    );
-    const heading = section.querySelector("h2[id]");
-    const marker =
-      heading && paper.querySelector(`[data-page-for="${heading.id}"]`);
-    if (marker) marker.textContent = String(pageNumber);
-    section.style.minHeight = `${sectionPages * pageHeight}px`;
-    pageNumber += sectionPages;
-  }
-  const attachmentRanges = [
-    ...paper.querySelectorAll(".attachment-preview"),
-  ].map((card) => {
-    const rect = card.getBoundingClientRect();
-    return { top: rect.top - paperTop, bottom: rect.bottom - paperTop };
-  });
-  for (
-    let page = 1;
-    contentTop + page * pageHeight < paper.scrollHeight;
-    page++
-  ) {
-    const y = contentTop + page * pageHeight;
-    if (
-      attachmentRanges.some(
-        (range) => y >= range.top - 6 && y <= range.bottom + 6,
-      )
-    )
-      continue;
-    const divider = document.createElement("div");
-    divider.className = "preview-page-divider";
-    divider.setAttribute("aria-hidden", "true");
-    divider.style.top = `${y}px`;
-    paper.prepend(divider);
-  }
-}
-
-async function renderPreviewAttachments() {
-  const store = portfolioStore();
-  const renderer = window.documentRenderer;
-  const placeholders = [
-    ...document.querySelectorAll("#preview-content [data-preview-file]"),
-  ];
-  for (const card of placeholders) {
-    const container = card.querySelector(".document-renderer");
-    try {
-      if (!store || !renderer)
-        throw new Error("The document renderer is unavailable.");
-      const file = await store.readFile(card.dataset.previewFile);
-      const bytes = Uint8Array.from(atob(file.base64), (char) =>
-        char.charCodeAt(0),
-      );
-      await renderer.render(
-        {
-          bytes,
-          fileName: card.dataset.fileName || "",
-          fileType: card.dataset.fileType || "",
-        },
-        container,
-      );
-    } catch (error) {
-      container.innerHTML = `<p class="document-preview-error">${esc(error.message || "This document could not be displayed.")}</p>`;
-    }
-  }
-  updatePreviewTocPageNumbers();
 }
 
 document.addEventListener("input", (event) => {
