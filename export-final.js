@@ -126,7 +126,7 @@ async function renderExport(data) {
   const program = portfolio.program?.name || "Program not entered";
   const goal = portfolio.aboutMe?.careerGoal || "Future-ready professional";
   const bio = portfolio.aboutMe?.biography || "";
-  const skills = (portfolio.aboutMe?.skills || []).join(", ");
+  const skills = (portfolio.aboutMe?.skills || []).map((skill) => typeof skill === "string" ? skill : skill?.name || "").filter(Boolean).join(", ");
   const interests = (portfolio.aboutMe?.interests || []).join(", ");
   const profile = asFile(student.profileImage);
   const profileImage = profile?.fileRef
@@ -283,6 +283,10 @@ async function renderExport(data) {
           "document-entry",
         ),
       );
+  }
+  for (const [index, attachment] of (portfolio.hiringDocuments?.resume?.attachments || []).entries()) {
+    const markup = await attachmentMarkup(attachment, `Resume attachment ${index + 1}`, "Hiring documents");
+    if (markup) hiringDocuments.push(entry(`Resume attachment ${index + 1}`, "", markup, "document-entry"));
   }
 
   const tocEntries = [

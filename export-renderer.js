@@ -148,7 +148,7 @@ async function renderExport(data) {
   const program = portfolio.program?.name || "Program not entered";
   const goal = portfolio.aboutMe?.careerGoal || "Future-ready professional";
   const bio = portfolio.aboutMe?.biography || "";
-  const skills = (portfolio.aboutMe?.skills || []).join(", ");
+  const skills = (portfolio.aboutMe?.skills || []).map((skill) => typeof skill === "string" ? skill : skill?.name || "").filter(Boolean).join(", ");
   const interests = (portfolio.aboutMe?.interests || []).join(", ");
   const profile = getAttachment(student.profileImage);
   const profileImage = profile
@@ -281,6 +281,11 @@ async function renderExport(data) {
       hiringDocuments.push(
         `<article class="portfolio-entry"><h3>${esc(label)}</h3>${attachmentMarkup}</article>`,
       );
+  }
+  for (const [index, attachment] of (portfolio.hiringDocuments?.resume?.attachments || []).entries()) {
+    const markup = await renderAttachment(attachment, `Resume attachment ${index + 1}`, attachment.fileName || "Resume attachment", "Hiring documents");
+    if (markup)
+      hiringDocuments.push(`<article class="portfolio-entry"><h3>Resume attachment ${index + 1}</h3>${markup}</article>`);
   }
 
   const toc = [

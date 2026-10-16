@@ -114,11 +114,9 @@ const id = (prefix) =>
 const documentValue = (title = "") => ({
   id: id("document"),
   title,
-  fileName: "",
-  fileType: "",
-  fileData: null,
   description: "",
   uploadedAt: null,
+  file: null,
 });
 const achievement = () => ({
   id: id("achievement"),
@@ -139,7 +137,6 @@ const defaultState = () => ({
   },
   program: { id: "", name: "", school: "ECTS" },
   theme: "ects-professional",
-  sections: [],
   aboutMe: {
     careerGoal: "",
     biography: "",
@@ -161,32 +158,7 @@ const defaultState = () => ({
     serviceExperiences: [],
   },
   recommendations: [],
-  careerSafe: {
-    careerSafe1: {
-      selectedOption: "",
-      certificate: null,
-      completionDate: "",
-      notes: "",
-    },
-    careerSafe2: {
-      selectedOption: "",
-      certificate: null,
-      completionDate: "",
-      notes: "",
-    },
-    careerSafe3: {
-      selectedOption: "",
-      certificate: null,
-      completionDate: "",
-      notes: "",
-    },
-    careerSafe4: {
-      selectedOption: "",
-      certificate: null,
-      completionDate: "",
-      notes: "",
-    },
-  },
+  careerSafe: { entries: [] },
   supportingAcademics: {
     postSecondaryPlan: {
       careerGoal: "",
@@ -257,6 +229,7 @@ const defaultState = () => ({
     version: 2,
     lastExportedAt: null,
   },
+  schemaVersion: 1,
 });
 let state = loadState();
 let current = "about";
@@ -304,8 +277,8 @@ function addCompatibilityAliases(portfolio) {
       set: (value) => (portfolio.aboutMe.biography = value),
     },
     skills: {
-      get: () => portfolio.aboutMe.skills.join(", "),
-      set: (value) => (portfolio.aboutMe.skills = split(value)),
+      get: () => skillNames(portfolio.aboutMe.skills).join(", "),
+      set: (value) => setAboutSkillNames(portfolio.aboutMe, value),
     },
     interests: {
       get: () => portfolio.aboutMe.interests.join(", "),
@@ -326,16 +299,12 @@ function addCompatibilityAliases(portfolio) {
     Object.defineProperty(documents, key, {
       get: () => {
         const document = portfolio.hiringDocuments[documentKey];
-        const attachedFile = document?.file || document;
-        return attachedFile?.fileName || attachedFile?.name || "";
+        return document?.file?.fileName || "";
       },
       set: (value) => {
         const document = portfolio.hiringDocuments[documentKey];
-        if (document?.file && typeof document.file === "object") {
+        if (document?.file && typeof document.file === "object")
           document.file.fileName = value || "";
-        } else {
-          document.fileName = value || "";
-        }
       },
     });
   const academics = {};
@@ -403,27 +372,30 @@ function addCompatibilityAliases(portfolio) {
     },
     samples: { value: portfolio.workSamples, enumerable: false },
     careersafe: {
-      value: ["careerSafe1", "careerSafe2", "careerSafe3", "careerSafe4"].map(
-        (key) => {
-          const item = portfolio.careerSafe[key];
+      value: ["1", "2", "3", "4"].map((category) => {
+          const findItem = () => portfolio.careerSafe.entries.find((entry) => String(entry.category) === category);
+          const getItem = () => findItem() || (
+            portfolio.careerSafe.entries.push({ id: id("career-safe"), category, selectedOption: "", certificate: null, completionDate: "", notes: "" }),
+            portfolio.careerSafe.entries.at(-1)
+          );
           return Object.defineProperties(
             {},
             {
               choice: {
-                get: () => item.selectedOption,
-                set: (value) => (item.selectedOption = value),
+                get: () => findItem()?.selectedOption || "",
+                set: (value) => (getItem().selectedOption = value),
               },
               file: {
-                get: () => item.certificate?.fileName || "",
+                get: () => findItem()?.certificate?.fileName || "",
                 set: (value) => {
+                  const item = getItem();
                   item.certificate = item.certificate || { fileName: "" };
                   item.certificate.fileName = value;
                 },
               },
             },
           );
-        },
-      ),
+        }),
       enumerable: false,
     },
     academics: { value: academics, enumerable: false },
@@ -519,6 +491,167 @@ function splitList(value) {
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
+}
+function skillNames(skills) {
+  return (Array.isArray(skills) ? skills : []).map((skill) =>
+    typeof skill === "string" ? skill : skill?.name || "",
+  ).filter(Boolean);
+}
+function setAboutSkillNames(aboutMe, value) {
+  const existing = Array.isArray(aboutMe.skills) ? aboutMe.skills : [];
+  const byName = new Map(
+    existing
+      .filter((skill) => skill && typeof skill === "object")
+      .map((skill) => [String(skill.name || "").trim().toLocaleLowerCase(), skill]),
+  );
+  aboutMe.skills = splitList(value).map((name) => {
+    const match = byName.get(name.toLocaleLowerCase());
+    return match || { id: id("skill"), name };
+  });
+  linkWorkSampleSkills(aboutMe.skills, state?.workSamples || []);
+}
+function linkWorkSampleSkills(skills, samples) {
+  const byName = new Map(
+    skills.map((skill) => [String(skill.name || "").trim().toLocaleLowerCase(), skill.id]),
+  );
+  for (const sample of samples) {
+    const current = Array.isArray(sample.skills) ? sample.skills : splitList(sample.skills);
+    const linked = [];
+    const unmatched = [...(Array.isArray(sample.unmatchedSkills) ? sample.unmatchedSkills : [])];
+    for (const entry of current) {
+      const name = typeof entry === "string" ? entry : entry?.name || "";
+      const skillId = typeof entry === "string" && skills.some((skill) => skill.id === entry)
+        ? entry
+        : byName.get(String(name).trim().toLocaleLowerCase());
+      if (skillId) {
+        if (!linked.includes(skillId)) linked.push(skillId);
+      } else if (name && !unmatched.includes(name)) unmatched.push(name);
+    }
+    for (let index = unmatched.length - 1; index >= 0; index--) {
+      const linkedId = byName.get(String(unmatched[index]).trim().toLocaleLowerCase());
+      if (linkedId) {
+        if (!linked.includes(linkedId)) linked.push(linkedId);
+        unmatched.splice(index, 1);
+      }
+    }
+    sample.skills = linked;
+    if (unmatched.length) sample.unmatchedSkills = unmatched;
+    else delete sample.unmatchedSkills;
+  }
+}
+function sampleSkillsText(sample) {
+  const byId = new Map((state.aboutMe.skills || []).map((skill) => [skill.id, skill.name]));
+  const linked = (sample.skills || []).map((skill) => byId.get(skill) || "").filter(Boolean);
+  return [...linked, ...(sample.unmatchedSkills || [])].join(", ");
+}
+function updateSampleSkillText(sample, value) {
+  sample.skills = [];
+  sample.unmatchedSkills = [];
+  const byName = new Map(
+    (state.aboutMe.skills || []).map((skill) => [skill.name.trim().toLocaleLowerCase(), skill.id]),
+  );
+  for (const name of splitList(value)) {
+    const skillId = byName.get(name.toLocaleLowerCase());
+    if (skillId) sample.skills.push(skillId);
+    else sample.unmatchedSkills.push(name);
+  }
+  if (!sample.unmatchedSkills.length) delete sample.unmatchedSkills;
+}
+function attachmentFromLegacy(record) {
+  if (!record || typeof record !== "object") return null;
+  const fileRef = record.fileRef || "";
+  const fileName = record.fileName || "";
+  const fileType = record.fileType || "";
+  if (!fileRef && !fileName && !fileType) return null;
+  return {
+    ...(fileRef ? { fileRef } : {}),
+    ...(fileName ? { fileName } : {}),
+    ...(fileType ? { fileType } : {}),
+    ...(record.uploadedAt ? { uploadedAt: record.uploadedAt } : {}),
+  };
+}
+function mergeAchievementRecords(canonical, legacy) {
+  const records = Array.isArray(canonical) ? canonical : [];
+  const legacyRecords = Array.isArray(legacy)
+    ? legacy
+    : legacy && typeof legacy === "object"
+      ? Object.keys(legacy)
+          .filter((key) => /^\d+$/.test(key))
+          .sort((a, b) => Number(a) - Number(b))
+          .map((key) => legacy[key])
+      : [];
+  const merged = records.map((record) => ({ ...(record || {}) }));
+  const used = new Set();
+  for (const item of legacyRecords) {
+    if (!item || typeof item !== "object") continue;
+    let matchIndex = merged.findIndex((candidate, index) =>
+      !used.has(index) && item.id && candidate.id === item.id,
+    );
+    if (matchIndex < 0 && legacyRecords.length === 1 && merged.length === 1)
+      matchIndex = 0;
+    if (matchIndex < 0) {
+      const title = String(item.title || "").trim().toLocaleLowerCase();
+      if (title)
+        matchIndex = merged.findIndex((candidate, index) =>
+          !used.has(index) && String(candidate.title || "").trim().toLocaleLowerCase() === title,
+        );
+    }
+    if (matchIndex >= 0) {
+      const candidate = merged[matchIndex];
+      let conflict = false;
+      for (const key of ["title", "organization", "date", "description"]) {
+        if (candidate[key] && item[key] && candidate[key] !== item[key]) conflict = true;
+      }
+      if (!conflict) {
+        for (const key of ["id", "title", "organization", "date", "description", "file"])
+          if ((candidate[key] === undefined || candidate[key] === "" || candidate[key] === null) && item[key] !== undefined)
+            candidate[key] = item[key];
+        used.add(matchIndex);
+        continue;
+      }
+    }
+    merged.push({ ...item, id: item.id || id("achievement") });
+  }
+  return merged.map((record) => {
+    const normalized = {
+      ...record,
+      id: record.id || id("achievement"),
+      title: record.title || "",
+      organization: record.organization || "",
+      date: record.date || "",
+      description: record.description || "",
+      file: record.file || attachmentFromLegacy(record),
+    };
+    for (const key of ["fileName", "fileType", "fileData", "fileRef"]) delete normalized[key];
+    if (!normalized.file) normalized.file = null;
+    return normalized;
+  });
+}
+function normalizeDate(value) {
+  if (typeof value !== "string" || !value.trim()) return value;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (/^\d{1,2}\/\d{2}$/.test(value)) return value; // Ambiguous month/year or month/day; preserve it.
+  const match = value.trim().match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
+  if (!match) return value;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const rawYear = Number(match[3]);
+  const year = match[3].length === 2 ? (rawYear <= 68 ? 2000 + rawYear : 1900 + rawYear) : rawYear;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return value;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function normalizePortfolioDates(value) {
+  if (Array.isArray(value)) {
+    value.forEach(normalizePortfolioDates);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if ((key === "date" || key === "completionDate") && typeof child === "string")
+      value[key] = normalizeDate(child);
+    else normalizePortfolioDates(child);
+  }
 }
 function loadState() {
   return addCompatibilityAliases(ensurePortableShape(defaultState()));
@@ -711,7 +844,7 @@ function aboutView() {
       "About me",
       "Introduce the person behind the work. This page becomes the opening of your portfolio.",
     ) +
-    `<section class="section-card"><div class="field-grid"><label class="field-label">First name<input data-bind="student.firstName" value="${esc(s.firstName)}" placeholder="First name"></label><label class="field-label">Last name<input data-bind="student.lastName" value="${esc(s.lastName)}" placeholder="Last name"></label><label class="field-label">Program<input data-bind="program.name" value="${esc(state.program.customNameEntered ? state.program.name || "" : "")}" placeholder="Type your program"></label><label class="field-label">Graduation year<select data-bind="student.graduationYear"><option ${s.graduationYear === "2026" ? "selected" : ""}>2026</option><option ${s.graduationYear === "2027" ? "selected" : ""}>2027</option><option ${s.graduationYear === "2028" ? "selected" : ""}>2028</option><option ${s.graduationYear === "2029" ? "selected" : ""}>2029</option></select></label><label class="field-label">Career goal<input data-bind="aboutMe.careerGoal" value="${esc(state.aboutMe.careerGoal)}" placeholder="e.g. Software developer"></label><label class="field-label field-full">Short biography<textarea data-bind="aboutMe.biography" placeholder="Write a short introduction about yourself, your interests, and what you hope to do after graduation.">${esc(state.aboutMe.biography)}</textarea></label><label class="field-label">Skills<textarea data-bind="aboutMe.skills" placeholder="Java, problem solving, communication...">${esc(state.aboutMe.skills.join(", "))}</textarea></label><label class="field-label">Interests<textarea data-bind="aboutMe.interests" placeholder="What do you enjoy learning or doing?">${esc(state.aboutMe.interests.join(", "))}</textarea></label><label class="field-label field-full">Additional information<textarea data-bind="aboutMe.additionalInformation" placeholder="Anything else you want a reviewer to know.">${esc(state.aboutMe.additionalInformation)}</textarea></label></div></section><section class="section-card"><h2>Profile image</h2><p>Optional. Use a clear, professional image. It stays on this device.</p>${fileUpload("profile", "Choose image", "student.image")}</section>`
+    `<section class="section-card"><div class="field-grid"><label class="field-label">First name<input data-bind="student.firstName" value="${esc(s.firstName)}" placeholder="First name"></label><label class="field-label">Last name<input data-bind="student.lastName" value="${esc(s.lastName)}" placeholder="Last name"></label><label class="field-label">Program<input data-bind="program.name" value="${esc(state.program.customNameEntered ? state.program.name || "" : "")}" placeholder="Type your program"></label><label class="field-label">Graduation year<select data-bind="student.graduationYear"><option ${s.graduationYear === "2026" ? "selected" : ""}>2026</option><option ${s.graduationYear === "2027" ? "selected" : ""}>2027</option><option ${s.graduationYear === "2028" ? "selected" : ""}>2028</option><option ${s.graduationYear === "2029" ? "selected" : ""}>2029</option></select></label><label class="field-label">Career goal<input data-bind="aboutMe.careerGoal" value="${esc(state.aboutMe.careerGoal)}" placeholder="e.g. Software developer"></label><label class="field-label field-full">Short biography<textarea data-bind="aboutMe.biography" placeholder="Write a short introduction about yourself, your interests, and what you hope to do after graduation.">${esc(state.aboutMe.biography)}</textarea></label><label class="field-label">Skills<textarea data-bind="aboutMe.skills" placeholder="Java, problem solving, communication...">${esc(skillNames(state.aboutMe.skills).join(", "))}</textarea></label><label class="field-label">Interests<textarea data-bind="aboutMe.interests" placeholder="What do you enjoy learning or doing?">${esc(state.aboutMe.interests.join(", "))}</textarea></label><label class="field-label field-full">Additional information<textarea data-bind="aboutMe.additionalInformation" placeholder="Anything else you want a reviewer to know.">${esc(state.aboutMe.additionalInformation)}</textarea></label></div></section><section class="section-card"><h2>Profile image</h2><p>Optional. Use a clear, professional image. It stays on this device.</p>${fileUpload("profile", "Choose image", "student.image")}</section>`
   );
 }
 function portfolioChecklistItems() {
@@ -889,7 +1022,10 @@ function documentsView() {
 }
 function recommendations() {
   const r = state.files.recommendations || [];
-  return `<div>${[0, 1, ...Array.from({ length: Math.max(0, r.length - 2) }, (_, i) => i + 2)].map((i) => `<div class="repeater"><div class="repeater-header"><strong>Recommendation ${i + 1}</strong>${i > 1 ? `<button class="remove-button" data-remove-rec="${i}">Remove</button>` : ""}</div>${fileUpload("recommendations", "Upload letter", "files.recommendations." + i + ".file")}</div>`).join("")}</div><button class="add-button" data-add="recommendation">+ Add recommendation</button><p class="microcopy">${r.filter(Boolean).length} of 2 required recommendations uploaded.</p>`;
+  return `<div>${[0, 1, ...Array.from({ length: Math.max(0, r.length - 2) }, (_, i) => i + 2)].map((i) => {
+    const record = r[i] || (r[i] = { id: id("recommendation"), authorName: "", relationship: "", date: "", file: null });
+    return `<div class="repeater"><div class="repeater-header"><strong>Recommendation ${i + 1}</strong>${i > 1 ? `<button class="remove-button" data-remove-rec="${i}">Remove</button>` : ""}</div><div class="field-grid"><label class="field-label">Author name<input data-recommendation="${i}.authorName" value="${esc(record.authorName || "")}" placeholder=""></label><label class="field-label">Relationship<input data-recommendation="${i}.relationship" value="${esc(record.relationship || "")}" placeholder=""></label><label class="field-label">Date<input type="date" data-recommendation="${i}.date" value="${esc(normalizeDate(record.date || ""))}"></label></div>${fileUpload("recommendations", "Upload letter", "files.recommendations." + i + ".file")}</div>`;
+  }).join("")}</div><button class="add-button" data-add="recommendation">+ Add recommendation</button><p class="microcopy">${r.filter((record) => record?.file?.fileRef || record?.file?.fileName).length} of 2 required recommendations uploaded.</p>`;
 }
 function samplesView() {
   return (
@@ -898,7 +1034,7 @@ function samplesView() {
       "Work samples",
       `Add at least 5 projects. You can include more to show range and growth.`,
     ) +
-    `${state.samples.length < 5 ? '<div class="warning"><strong>Add ' + (5 - state.samples.length) + " more work sample" + (5 - state.samples.length === 1 ? "" : "s") + " to meet the requirement.</strong></div>" : ""}<section class="section-card">${state.samples.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Work sample ${i + 1}</strong><button class="remove-button" data-remove-sample="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-sample="${i}.title" value="${esc(x.title)}" placeholder="e.g. Java Calculator"></label><label class="field-label">Date<input data-sample="${i}.date" value="${esc(x.date)}" placeholder="Month, year"></label><label class="field-label">Class / project<input data-sample="${i}.classOrProject" value="${esc(x.classOrProject)}" placeholder="e.g. Programming II"></label><label class="field-label">Skills demonstrated<input data-sample="${i}.skills" value="${esc(Array.isArray(x.skills) ? x.skills.join(", ") : x.skills)}" placeholder="Java, problem solving"></label><label class="field-label field-full">Description<textarea data-sample="${i}.description" placeholder="What did you build, and what did you learn?">${esc(x.description)}</textarea></label><label class="field-label field-full">Reflection<textarea data-sample="${i}.reflection" placeholder="What did this project teach you?">${esc(x.reflection)}</textarea></label><label class="field-label field-full">Optional link<input data-sample="${i}.link" value="${esc(x.link)}" placeholder="https://..."></label></div>${fileUpload("sample" + i, "Attach work sample", "samples." + i + ".file")}</div>`).join("")}<button class="add-button" data-add="sample">+ Add work sample</button></section>`
+    `${state.samples.length < 5 ? '<div class="warning"><strong>Add ' + (5 - state.samples.length) + " more work sample" + (5 - state.samples.length === 1 ? "" : "s") + " to meet the requirement.</strong></div>" : ""}<section class="section-card">${state.samples.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Work sample ${i + 1}</strong><button class="remove-button" data-remove-sample="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-sample="${i}.title" value="${esc(x.title)}" placeholder="e.g. Java Calculator"></label><label class="field-label">Date<input data-sample="${i}.date" value="${esc(x.date)}" placeholder="Month, year"></label><label class="field-label">Class / project<input data-sample="${i}.classOrProject" value="${esc(x.classOrProject)}" placeholder="e.g. Programming II"></label><label class="field-label">Skills demonstrated<input data-sample="${i}.skills" value="${esc(sampleSkillsText(x))}" placeholder="Java, problem solving"></label><label class="field-label field-full">Description<textarea data-sample="${i}.description" placeholder="What did you build, and what did you learn?">${esc(x.description)}</textarea></label><label class="field-label field-full">Reflection<textarea data-sample="${i}.reflection" placeholder="What did this project teach you?">${esc(x.reflection)}</textarea></label><label class="field-label field-full">Optional link<input data-sample="${i}.link" value="${esc(x.link)}" placeholder="https://..."></label></div>${fileUpload("sample" + i, "Attach work sample", "samples." + i + ".file")}</div>`).join("")}<button class="add-button" data-add="sample">+ Add work sample</button></section>`
   );
 }
 function credentialsView() {
@@ -1066,7 +1202,8 @@ function setPath(path, value) {
     obj = obj[p];
   });
   const key = parts.at(-1);
-  obj[key] = ["skills", "interests"].includes(key) ? splitList(value) : value;
+  if (path === "aboutMe.skills") setAboutSkillNames(state.aboutMe, value);
+  else obj[key] = key === "interests" ? splitList(value) : value;
 }
 function bindEditor() {
   document.querySelectorAll("[data-bind]").forEach(
@@ -1094,9 +1231,8 @@ function bindEditor() {
     (el) =>
       (el.oninput = () => {
         const [i, k] = el.dataset.sample.split(".");
-        state.samples[i][k] = ["skills"].includes(k)
-          ? splitList(el.value)
-          : el.value;
+        if (k === "skills") updateSampleSkillText(state.samples[i], el.value);
+        else state.samples[i][k] = el.value;
         save(true);
         updateProgress();
       }),
@@ -1139,6 +1275,15 @@ function bindEditor() {
         save(true);
       }),
   );
+  document.querySelectorAll("[data-recommendation]").forEach((el) => {
+    el.oninput = () => {
+      const [index, key] = el.dataset.recommendation.split(".");
+      if (state.recommendations[index]) {
+        state.recommendations[index][key] = key === "date" ? normalizeDate(el.value) : el.value;
+        save(true);
+      }
+    };
+  });
   document.querySelectorAll("[data-safe]").forEach(
     (el) =>
       (el.onchange = () => {
@@ -1247,10 +1392,9 @@ function addItem(kind) {
   else if (kind === "recommendation")
     state.recommendations.push({
       id: id("recommendation"),
-      title: "",
-      recommenderName: "",
-      recommenderRole: "",
-      description: "",
+      authorName: "",
+      relationship: "",
+      date: "",
       file: null,
     });
   else if (kind === "customSection")
@@ -1332,24 +1476,128 @@ function closeMenu() {
   $("#sidebar").classList.remove("open");
 }
 function ensurePortableShape(portfolio) {
-  portfolio.hiringDocuments =
-    portfolio.hiringDocuments || defaultState().hiringDocuments;
-  for (const [legacyKey, documentKey] of [
-    ["cover", "coverLetter"],
-    ["resume", "resume"],
-  ]) {
-    if (
-      portfolio[legacyKey] &&
-      !portfolio.hiringDocuments[documentKey]?.fileName
-    ) {
-      const legacyFile = portfolio[legacyKey];
-      if (typeof legacyFile === "object")
-        Object.assign(portfolio.hiringDocuments[documentKey], legacyFile);
-      else portfolio.hiringDocuments[documentKey].fileName = legacyFile;
-      delete portfolio[legacyKey];
-    }
+  if (!portfolio || typeof portfolio !== "object") portfolio = defaultState();
+  const defaults = defaultState();
+  portfolio.student = { ...defaults.student, ...(portfolio.student || {}) };
+  portfolio.program = { ...defaults.program, ...(portfolio.program || {}) };
+  portfolio.aboutMe = { ...defaults.aboutMe, ...(portfolio.aboutMe || {}) };
+  portfolio.theme ??= defaults.theme;
+  const achievementData = portfolio.accomplishments && typeof portfolio.accomplishments === "object"
+    ? portfolio.accomplishments
+    : {};
+  achievementData.awards = mergeAchievementRecords(
+    achievementData.awards,
+    portfolio.awards,
+  );
+  achievementData.accomplishments = mergeAchievementRecords(
+    achievementData.accomplishments,
+    achievementData["0"] ? { 0: achievementData["0"] } : null,
+  );
+  achievementData.extracurriculars = mergeAchievementRecords(
+    achievementData.extracurriculars,
+    portfolio.activities,
+  );
+  achievementData.serviceExperiences = mergeAchievementRecords(
+    achievementData.serviceExperiences,
+    portfolio.service,
+  );
+  delete achievementData["0"];
+  portfolio.accomplishments = achievementData;
+  delete portfolio.awards;
+  delete portfolio.activities;
+  delete portfolio.service;
+
+  portfolio.hiringDocuments = portfolio.hiringDocuments || {};
+  for (const [legacyKey, documentKey] of [["cover", "coverLetter"], ["resume", "resume"]]) {
+    if (!portfolio.hiringDocuments[documentKey] && portfolio[legacyKey])
+      portfolio.hiringDocuments[documentKey] = typeof portfolio[legacyKey] === "object"
+        ? { ...portfolio[legacyKey] }
+        : { fileName: portfolio[legacyKey] };
+    delete portfolio[legacyKey];
   }
-  portfolio.supportingAcademics = portfolio.supportingAcademics || {};
+  for (const key of ["resume", "coverLetter", "standardApplication"]) {
+    const source = portfolio.hiringDocuments[key] || {};
+    const nested = source.file && typeof source.file === "object"
+      ? { ...source.file }
+      : typeof source.file === "string" && source.file
+        ? { fileName: source.file }
+        : null;
+    const legacy = attachmentFromLegacy(source);
+    const file = nested || legacy;
+    const attachments = Array.isArray(source.attachments) ? [...source.attachments] : [];
+    const competingResumeFile = key === "resume" && legacy && nested &&
+      ((nested.fileRef && legacy.fileRef && nested.fileRef !== legacy.fileRef) ||
+        (!nested.fileRef || !legacy.fileRef) && nested.fileName !== legacy.fileName);
+    if (competingResumeFile &&
+      !attachments.some((item) => item?.fileRef && item.fileRef === legacy.fileRef))
+      attachments.push(legacy);
+    portfolio.hiringDocuments[key] = {
+      id: source.id || id("document"),
+      title: source.title ?? ({ resume: "Resume", coverLetter: "Cover Letter", standardApplication: "Standard Application" }[key]),
+      description: source.description || "",
+      uploadedAt: source.uploadedAt ?? file?.uploadedAt ?? null,
+      file: file || null,
+      ...(key === "resume" ? { attachments } : {}),
+    };
+  }
+
+  const recommendationRecords = Array.isArray(portfolio.recommendations)
+    ? portfolio.recommendations
+    : portfolio.recommendations ? [portfolio.recommendations] : [];
+  portfolio.recommendations = recommendationRecords.map((record) => {
+    const source = record && typeof record === "object" ? record : {};
+    const file = source.file && typeof source.file === "object"
+      ? source.file
+      : attachmentFromLegacy(source);
+    return {
+      id: source.id || id("recommendation"),
+      authorName: source.authorName || source.recommenderName || "",
+      relationship: source.relationship || source.recommenderRole || "",
+      date: source.date || "",
+      file: file || null,
+      ...(source.description ? { description: source.description } : {}),
+    };
+  });
+
+  const skillNamesById = new Map();
+  const existingSkills = Array.isArray(portfolio.aboutMe.skills) ? portfolio.aboutMe.skills : splitList(portfolio.aboutMe.skills);
+  portfolio.aboutMe.skills = existingSkills.map((skill) => {
+    const entry = typeof skill === "string" ? { id: id("skill"), name: skill } : { ...skill };
+    entry.id = entry.id || id("skill");
+    entry.name = String(entry.name || "");
+    skillNamesById.set(entry.id, entry.name);
+    return entry;
+  });
+  portfolio.workSamples = Array.isArray(portfolio.workSamples) ? portfolio.workSamples : [];
+  linkWorkSampleSkills(portfolio.aboutMe.skills, portfolio.workSamples);
+
+  portfolio.sections = Array.isArray(portfolio.sections) ? portfolio.sections : [];
+  portfolio.settings = { ...defaults.settings, ...(portfolio.settings || {}) };
+  if (!Array.isArray(portfolio.settings.sectionOrder) || !portfolio.settings.sectionOrder.length)
+    portfolio.settings.sectionOrder = portfolio.sections.length ? portfolio.sections : defaults.settings.sectionOrder;
+  delete portfolio.sections;
+  portfolio.settings.customSections = Array.isArray(portfolio.settings.customSections)
+    ? portfolio.settings.customSections
+    : [];
+
+  portfolio.supportingAcademics = {
+    ...defaults.supportingAcademics,
+    ...(portfolio.supportingAcademics || {}),
+  };
+  portfolio.supportingAcademics.postSecondaryPlan = {
+    ...defaults.supportingAcademics.postSecondaryPlan,
+    ...(portfolio.supportingAcademics.postSecondaryPlan || {}),
+  };
+  for (const key of ["reflections", "potentialEmployers", "postSecondaryOpportunities"])
+    if (!Array.isArray(portfolio.supportingAcademics[key])) portfolio.supportingAcademics[key] = [];
+  portfolio.supportingAcademics.instructionalAssistant = {
+    ...defaults.supportingAcademics.instructionalAssistant,
+    ...(portfolio.supportingAcademics.instructionalAssistant || {}),
+  };
+  portfolio.supportingAcademics.instructor = {
+    ...defaults.supportingAcademics.instructor,
+    ...(portfolio.supportingAcademics.instructor || {}),
+  };
   portfolio.supportingAcademics.documents =
     portfolio.supportingAcademics.documents || {};
   portfolio.careerSafe = portfolio.careerSafe || {};
@@ -1367,6 +1615,72 @@ function ensurePortableShape(portfolio) {
           notes: item.notes || "",
         };
       });
+  for (let index = 0; index < 4; index++) {
+    const key = `careerSafe${index + 1}`;
+    const legacy = portfolio.careerSafe[key];
+    if (legacy && typeof legacy === "object") {
+      const existing = portfolio.careerSafe.entries.find((entry) => String(entry.category) === String(index + 1));
+      if (existing) {
+        existing.selectedOption ||= legacy.selectedOption || "";
+        existing.certificate ||= legacy.certificate || null;
+        existing.completionDate ||= legacy.completionDate || "";
+        existing.notes ||= legacy.notes || "";
+      } else if (legacy.selectedOption || legacy.certificate || legacy.completionDate || legacy.notes) {
+        portfolio.careerSafe.entries.push({
+          id: id("career-safe"),
+          category: String(index + 1),
+          selectedOption: legacy.selectedOption || "",
+          certificate: legacy.certificate || null,
+          completionDate: legacy.completionDate || "",
+          notes: legacy.notes || "",
+        });
+      }
+      const empty = !legacy.selectedOption && !legacy.certificate && !legacy.completionDate && !legacy.notes;
+      if (empty || existing || portfolio.careerSafe.entries.some((entry) => String(entry.category) === String(index + 1)))
+        delete portfolio.careerSafe[key];
+    }
+  }
+  portfolio.credentials = Array.isArray(portfolio.credentials) ? portfolio.credentials : [];
+  portfolio.metadata = { ...defaults.metadata, ...(portfolio.metadata || {}) };
+  for (const key of ["awards", "accomplishments", "extracurriculars", "serviceExperiences"])
+    if (!Array.isArray(portfolio.accomplishments[key])) portfolio.accomplishments[key] = [];
+  portfolio.cewStandards = {
+    ...defaults.cewStandards,
+    ...(portfolio.cewStandards || {}),
+  };
+  const academicDocuments = portfolio.supportingAcademics.documents;
+  const cewMatches = {
+    "Post-secondary plan": [academicDocuments.postSecondary?.id].filter(Boolean),
+    "Potential employers": [academicDocuments.employers?.id].filter(Boolean),
+    "Work samples": portfolio.workSamples.map((sample) => sample.id).filter(Boolean),
+    "Career reflections": ["growth", "reflection1", "reflection2"]
+      .map((key) => academicDocuments[key]?.id).filter(Boolean),
+    "Career goal": [],
+  };
+  for (const standard of Object.values(portfolio.cewStandards)) {
+    if (!Array.isArray(standard.evidence)) standard.evidence = [];
+    const evidence = [];
+    for (const item of standard.evidence) {
+      const matches = item.portfolioItemId ? [] : cewMatches[item.portfolioItemType] || [];
+      if (!matches.length) {
+        evidence.push(item);
+      } else if (matches.length === 1) {
+        evidence.push({ ...item, portfolioItemId: matches[0] });
+      } else {
+        for (const itemId of matches) evidence.push({ ...item, portfolioItemId: itemId });
+      }
+    }
+    standard.evidence = evidence;
+  }
+  for (const record of portfolio.recommendations) record.date = normalizeDate(record.date);
+  normalizePortfolioDates(portfolio);
+  const dateOrder = (record) => /^\d{4}-\d{2}-\d{2}$/.test(record?.date || "")
+    ? Date.parse(`${record.date}T00:00:00Z`)
+    : Number.NEGATIVE_INFINITY;
+  const sortNewestFirst = (a, b) => dateOrder(b) - dateOrder(a);
+  portfolio.workSamples.sort(sortNewestFirst);
+  portfolio.credentials.sort(sortNewestFirst);
+  portfolio.schemaVersion = 1;
   return portfolio;
 }
 function academicDocument(key, title) {
@@ -1639,6 +1953,7 @@ async function loadBackup() {
     const portfolio = await store.importArchive();
     if (!portfolio) return;
     state = addCompatibilityAliases(ensurePortableShape(portfolio));
+    save(true);
     startApp();
     toast("Portfolio opened successfully.");
   } catch (error) {
@@ -1732,6 +2047,7 @@ if (store) {
     .then((saved) => {
       if (!saved) return;
       state = addCompatibilityAliases(ensurePortableShape(saved));
+      save(true);
       if (state.student.name) startApp();
       else show("landing");
     })

@@ -46,18 +46,29 @@ function renderAboutMe(portfolio = {}) {
   const contents = document.getElementById("contents-list");
   contents.replaceChildren(...sections.map(({ label, target }) => {
     const item = document.createElement("li");
-    const destination = document.getElementById(target);
+    item.dataset.target = target;
+    const destination = document.getElementById(target) || [
+      "recommendations",
+      "cover-letter",
+      "resume",
+      "standard-application",
+    ].includes(target);
     const labelElement = destination ? document.createElement("a") : document.createElement("span");
     if (destination) labelElement.href = `#${target}`;
     labelElement.textContent = label;
     const pageNumber = document.createElement("span");
     pageNumber.className = "page-number";
-    pageNumber.setAttribute("aria-hidden", "true");
-    item.append(labelElement, pageNumber);
+    pageNumber.textContent = "—";
+    const leader = document.createElement("span");
+    leader.className = "contents-leader";
+    leader.setAttribute("aria-hidden", "true");
+    item.append(labelElement, leader, pageNumber);
     return item;
   }));
   for (const [key, elementId] of [["skills", "skills"], ["interests", "interests"]]) {
-    const values = Array.isArray(about[key]) ? about[key].filter(Boolean) : [];
+    const values = Array.isArray(about[key])
+      ? about[key].map((value) => typeof value === "string" ? value : value?.name || "").filter(Boolean)
+      : [];
     const list = document.getElementById(elementId);
     list.replaceChildren(...values.map((value) => {
       const item = document.createElement("li");
@@ -69,16 +80,24 @@ function renderAboutMe(portfolio = {}) {
   document.title = `${fullName} | About Me`;
 }
 
-window.addEventListener("about-me-data-ready", async () => {
+window.addEventListener("about-me-data-ready", () => {
   const portfolio = window.__ABOUT_ME_DATA__ || {};
-  renderAboutMe(portfolio);
-  await renderHiringDocuments(portfolio);
-  await renderWorkSamples(portfolio);
-  await renderCredentials(portfolio);
-  renderAccomplishments(portfolio);
-  await renderCareerSafe(portfolio);
-  await renderSupportingAcademics(portfolio);
-  renderCewStandards(portfolio);
+  window.__PREVIEW_READY__ = (async () => {
+    try {
+      renderAboutMe(portfolio);
+      await renderHiringDocuments(portfolio);
+      await renderWorkSamples(portfolio);
+      await renderCredentials(portfolio);
+      renderAccomplishments(portfolio);
+      await renderCareerSafe(portfolio);
+      await renderSupportingAcademics(portfolio);
+      renderCewStandards(portfolio);
+    } catch (error) {
+      console.error("Portfolio preview could not be fully rendered.", error);
+    } finally {
+      updateContentsPageNumbers();
+    }
+  })();
 });
 
 function documentFile(value) {
@@ -103,14 +122,19 @@ async function renderHiringDocuments(portfolio) {
     entries.push({ title: "Cover Letter", file: coverLetter });
   if (resume?.fileRef || resume?.fileName)
     entries.push({ title: "Resume", file: resume });
+  for (const [index, attachment] of (portfolio.hiringDocuments?.resume?.attachments || []).entries()) {
+    const file = documentFile(attachment);
+    if (file?.fileRef || file?.fileName)
+      entries.push({ title: `Resume attachment ${index + 1}`, file });
+  }
   if (applicationFile?.fileRef || applicationFile?.fileName)
     entries.push({ title: "Standard Application", file: applicationFile });
   for (const [index, recommendation] of (portfolio.recommendations || []).entries()) {
     const file = documentFile(recommendation?.file || recommendation);
     if (file?.fileRef || file?.fileName)
       entries.push({
-        title: recommendation?.recommenderName
-          ? `Recommendation Letter · ${recommendation.recommenderName}`
+        title: recommendation?.authorName
+          ? `Recommendation Letter · ${recommendation.authorName}`
           : `Recommendation Letter ${index + 1}`,
         file,
       });
@@ -130,6 +154,14 @@ async function renderHiringDocuments(portfolio) {
   list.replaceChildren(...entries.map(({ title, file }, index) => {
     const card = document.createElement("article");
     card.className = "document-card";
+    if (title === "Cover Letter") card.id = "cover-letter";
+    else if (title === "Resume") card.id = "resume";
+    else if (title === "Standard Application") card.id = "standard-application";
+    else if (
+      title.startsWith("Recommendation Letter") &&
+      !document.getElementById("recommendations")
+    )
+      card.id = "recommendations";
     const heading = document.createElement("header");
     heading.className = "document-card-heading";
     const titleElement = document.createElement("h2");
@@ -210,8 +242,9 @@ async function renderWorkSamples(portfolio) {
       card.append(description);
     }
 
+    const skillsById = new Map((portfolio.aboutMe?.skills || []).map((skill) => [skill.id, skill.name]));
     const skills = Array.isArray(sample.skills)
-      ? sample.skills.filter(Boolean)
+      ? [...sample.skills.map((skill) => skillsById.get(skill) || (typeof skill === "string" ? skill : "")).filter(Boolean), ...(sample.unmatchedSkills || [])]
       : String(sample.skills || "").split(",").map((skill) => skill.trim()).filter(Boolean);
     if (skills.length) {
       const skillList = document.createElement("ul");
@@ -697,6 +730,81 @@ function renderCewStandards(portfolio) {
     }
     return card;
   }));
+}
+
+function attachmentPageCount(container) {
+  if (!container) return 1;
+  return Math.max(
+    1,
+    container.querySelectorAll(".pdf-page-wrapper").length,
+    container.querySelectorAll(".docx").length,
+    container.querySelectorAll("img.attachment-image").length,
+  );
+}
+
+function countCardPages(sheet, cardSelector, attachmentSelector) {
+  const cards = [...sheet.querySelectorAll(cardSelector)];
+  if (!cards.length) return 1;
+  return cards.reduce((total, card) => {
+    const attachment = card.querySelector(attachmentSelector);
+    return total + attachmentPageCount(attachment);
+  }, 0);
+}
+
+function estimateFlowPages(sheet) {
+  return Math.max(1, Math.ceil(sheet.scrollHeight / 1018));
+}
+
+function sheetPageCount(sheet) {
+  switch (sheet.id) {
+    case "hiring-documents":
+      return countCardPages(sheet, ".document-card", ".document-pages");
+    case "work-samples":
+      return countCardPages(sheet, ".work-sample-card", ".work-sample-attachment");
+    case "industry-credentials":
+      return countCardPages(sheet, ".credential-card", ".credential-attachment");
+    case "careersafe":
+      return countCardPages(sheet, ".careersafe-card", ".careersafe-attachment");
+    case "supporting-academics":
+      return countCardPages(
+        sheet,
+        ".academic-document-card, .academic-checkoffs-card",
+        ".academic-attachment",
+      );
+    case "table-of-contents":
+    case "about-me":
+    case "accomplishments":
+    case "cew-standards":
+    default:
+      return estimateFlowPages(sheet);
+  }
+}
+
+function updateContentsPageNumbers() {
+  const pageBySection = new Map();
+  let nextPage = 1;
+  for (const sheet of document.querySelectorAll(".sheet")) {
+    pageBySection.set(sheet.id, nextPage);
+    nextPage += sheetPageCount(sheet);
+  }
+
+  const hiringSheet = document.getElementById("hiring-documents");
+  if (hiringSheet) {
+    let recommendationPage = pageBySection.get("hiring-documents") || 1;
+    for (const card of hiringSheet.querySelectorAll(".document-card")) {
+      if (
+        ["cover-letter", "resume", "standard-application", "recommendations"].includes(card.id)
+      )
+        pageBySection.set(card.id, recommendationPage);
+      recommendationPage += attachmentPageCount(card.querySelector(".document-pages"));
+    }
+  }
+
+  for (const item of document.querySelectorAll("#contents-list li")) {
+    const target = item.dataset.target;
+    const page = target ? pageBySection.get(target) : null;
+    item.querySelector(".page-number").textContent = page ? String(page) : "—";
+  }
 }
 
 document.getElementById("print-button").addEventListener("click", async (event) => {

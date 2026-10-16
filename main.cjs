@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, protocol, shell } = require("electr
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const crypto = require("node:crypto");
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -330,10 +331,11 @@ app.whenReady().then(() => {
     });
     previewWindow.on("page-title-updated", (event) => event.preventDefault());
     await previewWindow.loadFile(path.join(__dirname, "preview.html"));
-    await previewWindow.webContents.executeJavaScript(`
+    await previewWindow.webContents.executeJavaScript(`(async () => {
       window.__ABOUT_ME_DATA__ = ${JSON.stringify(previewData)};
       window.dispatchEvent(new Event('about-me-data-ready'));
-    `);
+      await window.__PREVIEW_READY__;
+    })()`);
     return true;
   });
   ipcMain.handle("portfolio:print-preview", async (event) => {
@@ -345,9 +347,11 @@ app.whenReady().then(() => {
     ])`);
     const pdf = await contents.printToPDF({
       printBackground: true,
-      displayHeaderFooter: false,
+      displayHeaderFooter: true,
+      headerTemplate: "<div></div>",
+      footerTemplate: `<div style="width:100%;margin:0 .8in;color:#657482;font:8px Arial,sans-serif;text-align:right;"><span class="pageNumber"></span></div>`,
       pageSize: "Letter",
-      margins: { top: 0, right: 0, bottom: 0, left: 0 },
+      margins: { top: 0.2, right: 0, bottom: 0.2, left: 0 },
     });
     const previewName = contents
       .getTitle()
@@ -461,19 +465,20 @@ app.whenReady().then(() => {
       });
       if (canceled || !filePath) return false;
       const payload = JSON.parse(JSON.stringify(portfolio));
-      const relationships = [];
-      walkFileReferences(payload, (record) =>
-        relationships.push({
-          fileRef: record.fileRef,
-          fileName: record.fileName || "",
-          fileType: record.fileType || "",
-        }),
-      );
+      payload.schemaVersion = payload.schemaVersion || 1;
+      const originalRelationships = new Map();
+      walkFileReferences(payload, (record) => {
+        if (!originalRelationships.has(record.fileRef))
+          originalRelationships.set(record.fileRef, {
+            fileRef: record.fileRef,
+            fileName: record.fileName || "",
+            fileType: record.fileType || "",
+          });
+      });
       const storedNames = await fs.readdir(uploadsPath()).catch(() => []);
-      const files = [];
-      for (const reference of new Set(
-        relationships.map((item) => item.fileRef),
-      )) {
+      const filesByHash = new Map();
+      const referenceMap = new Map();
+      for (const reference of originalRelationships.keys()) {
         const name = storedNames.find((candidate) =>
           candidate.startsWith(`${reference}.`),
         );
@@ -481,11 +486,29 @@ app.whenReady().then(() => {
           throw new Error(
             `The attachment “${reference}” is missing from this computer.`,
           );
-        files.push([
-          `files/${name}`,
-          await fs.readFile(path.join(uploadsPath(), name)),
-        ]);
+        const data = await fs.readFile(path.join(uploadsPath(), name));
+        const digest = crypto.createHash("sha256").update(data).digest("hex");
+        if (!filesByHash.has(digest))
+          filesByHash.set(digest, [`files/${name}`, data, reference]);
+        referenceMap.set(reference, filesByHash.get(digest)[2]);
       }
+      walkFileReferences(payload, (record) => {
+        record.fileRef = referenceMap.get(record.fileRef) || record.fileRef;
+      });
+      const files = [...filesByHash.values()].map(([name, data]) => [name, data]);
+      const relationships = [];
+      const relationshipRefs = new Set();
+      walkFileReferences(payload, (record) => {
+        if (relationshipRefs.has(record.fileRef)) return;
+        relationshipRefs.add(record.fileRef);
+        const oldReference = [...referenceMap].find(([, canonical]) => canonical === record.fileRef)?.[0];
+        const original = originalRelationships.get(oldReference || record.fileRef) || {};
+        relationships.push({
+          fileRef: record.fileRef,
+          fileName: original.fileName || record.fileName || "",
+          fileType: original.fileType || record.fileType || "",
+        });
+      });
       const manifest = {
         format: "ects-portfolio",
         version: 1,
