@@ -137,3 +137,6 @@
 .contents-list li{gap:10px}
 .contents-leader{flex:1;min-width:22px;border-bottom:1px dotted #d4dde1;transform:translateY(-4px)}
 .page-number{flex:0 0 2ch;min-width:2ch;border:0;transform:none;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.sheet-page-number{white-space:nowrap;font-variant-numeric:tabular-nums}
+

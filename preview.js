@@ -785,7 +785,23 @@ function updateContentsPageNumbers() {
   let nextPage = 1;
   for (const sheet of document.querySelectorAll(".sheet")) {
     pageBySection.set(sheet.id, nextPage);
-    nextPage += sheetPageCount(sheet);
+    const pageCount = sheetPageCount(sheet);
+    nextPage += pageCount;
+
+    const footer = sheet.querySelector("footer");
+    if (footer) {
+      let pageNumber = footer.querySelector(".sheet-page-number");
+      if (!pageNumber) {
+        pageNumber = document.createElement("span");
+        pageNumber.className = "sheet-page-number";
+        pageNumber.setAttribute("aria-label", "Page number");
+        footer.append(pageNumber);
+      }
+      const lastPage = pageBySection.get(sheet.id) + pageCount - 1;
+      pageNumber.textContent = pageCount > 1
+        ? `Pages ${pageBySection.get(sheet.id)}–${lastPage}`
+        : `Page ${pageBySection.get(sheet.id)}`;
+    }
   }
 
   const hiringSheet = document.getElementById("hiring-documents");
@@ -822,3 +838,5 @@ document.getElementById("print-button").addEventListener("click", async (event) 
     button.textContent = "Print Preview";
   }
 });
+
+window.addEventListener("resize", updateContentsPageNumbers);
