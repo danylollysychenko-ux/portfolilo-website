@@ -142,6 +142,48 @@ function safeFileId(value) {
   return typeof value === "string" && /^[a-f0-9-]{20,80}$/i.test(value);
 }
 
+function slugifyAssetName(value, fallback = "attachment") {
+  const extension = path.extname(String(value || "")).toLowerCase();
+  const stem = path
+    .basename(String(value || ""), extension)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${stem || fallback}${extension}`;
+}
+
+function attachmentFileRef(value) {
+  return value?.file?.fileRef || value?.fileRef || "";
+}
+
+function assetNamesByReference(portfolio) {
+  const names = new Map();
+  const add = (reference, name) => {
+    if (reference && name && !names.has(reference)) names.set(reference, name);
+  };
+  const profile = portfolio.student?.profileImage?.file || portfolio.student?.profileImage;
+  add(profile?.fileRef, `profile-image${path.extname(profile?.fileName || "")}`);
+  for (const [key, record] of Object.entries(portfolio.hiringDocuments || {})) {
+    const label = key.replace(/([a-z0-9])([A-Z])/g, "$1-$2");
+    add(attachmentFileRef(record), `${slugifyAssetName(label)}${path.extname(record?.file?.fileName || record?.fileName || "")}`);
+    for (const attachment of record?.attachments || [])
+      add(attachment.fileRef, `resume-attachment${path.extname(attachment.fileName || "")}`);
+  }
+  for (const sample of portfolio.workSamples || [])
+    add(attachmentFileRef(sample), `work-sample-${slugifyAssetName(sample.title || "project")}`);
+  for (const record of portfolio.credentials || [])
+    add(attachmentFileRef(record), `credential-${slugifyAssetName(record.name || "certificate")}`);
+  for (const record of portfolio.careerSafe?.entries || [])
+    add(attachmentFileRef(record.certificate), `careersafe-${slugifyAssetName(record.selectedOption || "certificate")}`);
+  for (const [key, record] of Object.entries(portfolio.supportingAcademics?.documents || {}))
+    add(attachmentFileRef(record), `academic-${slugifyAssetName(record.title || key)}`);
+  for (const [index, record] of (portfolio.recommendations || []).entries())
+    add(attachmentFileRef(record), `recommendation-${index + 1}${path.extname(record?.file?.fileName || record?.fileName || "")}`);
+  return names;
+}
+
 async function writePortfolio(portfolio) {
   await fs.mkdir(uploadsPath(), { recursive: true });
   const temp = `${portfolioPath()}.tmp`;
@@ -274,49 +316,6 @@ app.whenReady().then(() => {
       .trim() || student.displayName || "Student";
     const previewData = structuredClone(portfolio);
     previewData.tableOfContents = Array.isArray(contents) ? contents : [];
-    const documentReferences = new Map();
-    const documentRecords = [
-      portfolio.hiringDocuments?.coverLetter,
-      portfolio.hiringDocuments?.resume,
-      portfolio.hiringDocuments?.standardApplication,
-      portfolio.supportingAcademics?.documents?.employment,
-      ...Object.values(portfolio.supportingAcademics?.documents || {}),
-      ...(portfolio.recommendations || []),
-      ...(portfolio.workSamples || []),
-      ...(portfolio.credentials || []),
-      ...(portfolio.careerSafe?.entries || []),
-    ];
-    for (const record of documentRecords)
-      walkFileReferences(record, (file) => {
-        if (file.fileRef && safeFileId(file.fileRef))
-          documentReferences.set(file.fileRef, {
-            fileName: file.fileName || "Attached document",
-            fileType: file.fileType || "application/octet-stream",
-          });
-      });
-    const storedFiles = await fs.readdir(uploadsPath()).catch(() => []);
-    previewData.previewAttachments = {};
-    for (const [fileRef, metadata] of documentReferences) {
-      const storedName = storedFiles.find((candidate) =>
-        candidate.startsWith(`${fileRef}.`),
-      );
-      if (!storedName) continue;
-      const bytes = await fs.readFile(path.join(uploadsPath(), storedName));
-      previewData.previewAttachments[fileRef] = {
-        ...metadata,
-        base64: bytes.toString("base64"),
-      };
-    }
-    const profileImage = previewData.student?.profileImage;
-    if (profileImage?.fileRef && safeFileId(profileImage.fileRef)) {
-      const storedName = (await fs.readdir(uploadsPath()).catch(() => [])).find(
-        (candidate) => candidate.startsWith(`${profileImage.fileRef}.`),
-      );
-      if (storedName) {
-        const bytes = await fs.readFile(path.join(uploadsPath(), storedName));
-        profileImage.previewDataUrl = `data:${profileImage.fileType || "image/jpeg"};base64,${bytes.toString("base64")}`;
-      }
-    }
     const previewWindow = new BrowserWindow({
       width: 1000,
       height: 850,
@@ -478,6 +477,8 @@ app.whenReady().then(() => {
       const storedNames = await fs.readdir(uploadsPath()).catch(() => []);
       const filesByHash = new Map();
       const referenceMap = new Map();
+      const preferredNames = assetNamesByReference(payload);
+      const usedAssetPaths = new Set();
       for (const reference of originalRelationships.keys()) {
         const name = storedNames.find((candidate) =>
           candidate.startsWith(`${reference}.`),
@@ -488,10 +489,35 @@ app.whenReady().then(() => {
           );
         const data = await fs.readFile(path.join(uploadsPath(), name));
         const digest = crypto.createHash("sha256").update(data).digest("hex");
-        if (!filesByHash.has(digest))
-          filesByHash.set(digest, [`files/${name}`, data, reference]);
+        if (!filesByHash.has(digest)) {
+          const originalName = originalRelationships.get(reference)?.fileName || name;
+          const extension = path.extname(name) || path.extname(originalName);
+          const preferredName = preferredNames.get(reference) || originalName;
+          const slugged = slugifyAssetName(preferredName);
+          const assetName = path.extname(slugged) ? slugged : `${slugged}${extension}`;
+          const fileType = originalRelationships.get(reference)?.fileType || "";
+          const folder = fileType.startsWith("image/") || [".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(extension.toLowerCase())
+            ? "images"
+            : (payload.workSamples || []).some((sample) => attachmentFileRef(sample) === reference)
+              ? "projects"
+              : "documents";
+          let archivePath = `${folder}/${assetName}`;
+          if (usedAssetPaths.has(archivePath)) {
+            const extension = path.extname(assetName);
+            const stem = path.basename(assetName, extension);
+            archivePath = `${folder}/${stem}-${reference.slice(0, 8)}${extension}`;
+          }
+          usedAssetPaths.add(archivePath);
+          filesByHash.set(digest, [archivePath, data, reference]);
+        }
         referenceMap.set(reference, filesByHash.get(digest)[2]);
       }
+      const assetPaths = new Map(
+        [...filesByHash.values()].map(([name, , reference]) => [reference, name]),
+      );
+      const assetSizes = new Map(
+        [...filesByHash.values()].map(([, data, reference]) => [reference, data.length]),
+      );
       walkFileReferences(payload, (record) => {
         record.fileRef = referenceMap.get(record.fileRef) || record.fileRef;
       });
@@ -507,7 +533,25 @@ app.whenReady().then(() => {
           fileRef: record.fileRef,
           fileName: original.fileName || record.fileName || "",
           fileType: original.fileType || record.fileType || "",
+          path: assetPaths.get(record.fileRef) || "",
         });
+      });
+      const previousAssets = new Map(
+        (Array.isArray(payload.assets) ? payload.assets : []).map((asset) => [asset.fileRef || asset.id, asset]),
+      );
+      payload.assets = relationships.map((relationship) => {
+        const previous = previousAssets.get(relationship.fileRef) || {};
+        return {
+          ...previous,
+          id: relationship.fileRef,
+          fileRef: relationship.fileRef,
+          path: relationship.path,
+          fileName: relationship.fileName,
+          mediaType: relationship.fileType,
+          description: previous.description || "",
+          tags: Array.isArray(previous.tags) ? previous.tags : [],
+          sizeBytes: assetSizes.get(relationship.fileRef) || previous.sizeBytes || 0,
+        };
       });
       const manifest = {
         format: "ects-portfolio",
@@ -550,21 +594,34 @@ app.whenReady().then(() => {
     const tempDir = `${dataDirectory()}-import-${Date.now()}`;
     await fs.mkdir(path.join(tempDir, "files"), { recursive: true });
     try {
+      const relationshipsByPath = new Map(
+        (Array.isArray(manifest.relationships) ? manifest.relationships : [])
+          .filter((relationship) => typeof relationship.path === "string")
+          .map((relationship) => [relationship.path, relationship]),
+      );
       for (const name of manifest.files || []) {
+        const segments = typeof name === "string" ? name.split("/") : [];
         if (
           typeof name !== "string" ||
-          !name.startsWith("files/") ||
-          name.includes("..") ||
-          name.includes("\\")
+          name.startsWith("/") ||
+          name.includes("\\") ||
+          segments.some((segment) => !segment || segment === "." || segment === "..") ||
+          !["files", "projects", "documents", "images", "metadata"].includes(segments[0]) ||
+          segments.length < 2
         )
           throw new Error("The archive contains an unsafe file path.");
-        const id = path.basename(name).split(".")[0];
+        const relationship = relationshipsByPath.get(name);
+        const legacyId = segments[0] === "files"
+          ? path.posix.basename(name).split(".")[0]
+          : "";
+        const id = relationship?.fileRef || legacyId;
         if (!safeFileId(id))
           throw new Error("The archive contains an invalid file reference.");
         const data = entries.get(name);
         if (!data) throw new Error("A portfolio attachment is missing.");
+        const extension = path.posix.extname(name) || path.extname(relationship?.fileName || "");
         await fs.writeFile(
-          path.join(tempDir, "files", path.basename(name)),
+          path.join(tempDir, "files", `${id}${extension}`),
           data,
         );
       }

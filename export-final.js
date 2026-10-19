@@ -144,6 +144,7 @@ async function renderExport(data) {
   const sampleItems = (portfolio.workSamples || []).filter(
     (item) =>
       item &&
+      window.PortfolioQuality.publicRecord(item, "workSample") &&
       (item.title ||
         item.description ||
         item.reflection ||
@@ -169,6 +170,7 @@ async function renderExport(data) {
   const credentialItems = (portfolio.credentials || []).filter(
     (item) =>
       item &&
+      window.PortfolioQuality.publicRecord(item, "credential") &&
       (item.name ||
         item.organization ||
         item.date ||
@@ -196,6 +198,7 @@ async function renderExport(data) {
   for (const [kind, items] of Object.entries(portfolio.accomplishments || {})) {
     if (!Array.isArray(items)) continue;
     for (const item of items) {
+      if (!window.PortfolioQuality.publicRecord(item, "achievement")) continue;
       const attachment = await attachmentMarkup(
         item.file,
         item.title || item.name || kind,
@@ -212,7 +215,11 @@ async function renderExport(data) {
   }
 
   const careerSafe = [];
-  for (const item of Object.values(portfolio.careerSafe || {})) {
+  const careerSafeRecords = Array.isArray(portfolio.careerSafe?.entries)
+    ? portfolio.careerSafe.entries
+    : Object.entries(portfolio.careerSafe || {}).filter(([key]) => /^careerSafe\d+$/.test(key)).map(([, item]) => item);
+  for (const item of careerSafeRecords) {
+    if (!window.PortfolioQuality.publicRecord({ ...item, title: item?.selectedOption }, "careerSafe")) continue;
     if (!item?.selectedOption && !item?.certificate?.fileRef) continue;
     const attachment = await attachmentMarkup(
       item.certificate,
@@ -234,6 +241,7 @@ async function renderExport(data) {
   for (const [key, item] of Object.entries(
     portfolio.supportingAcademics?.documents || {},
   )) {
+    if (!window.PortfolioQuality.publicRecord(item, "academic")) continue;
     const attachment = await attachmentMarkup(
       item,
       item.title || key,
@@ -271,50 +279,58 @@ async function renderExport(data) {
     ["Resume", portfolio.hiringDocuments?.resume],
     ["Standard application", portfolio.hiringDocuments?.standardApplication],
   ]) {
+    if (value?.publicationStatus !== "published") continue;
     const attachment = await attachmentMarkup(value, label, "Hiring documents");
     if (attachment)
       hiringDocuments.push(
         entry(
           label,
           label === "Resume"
-            ? "Confirm this version was updated within the last 3 months."
+            ? ""
             : "",
           attachment,
           "document-entry",
         ),
       );
   }
-  for (const [index, attachment] of (portfolio.hiringDocuments?.resume?.attachments || []).entries()) {
+  for (const [index, attachment] of (portfolio.hiringDocuments?.resume?.publicationStatus === "published" ? portfolio.hiringDocuments.resume.attachments || [] : []).entries()) {
     const markup = await attachmentMarkup(attachment, `Resume attachment ${index + 1}`, "Hiring documents");
     if (markup) hiringDocuments.push(entry(`Resume attachment ${index + 1}`, "", markup, "document-entry"));
   }
 
+  const recommendations = [];
+  for (const [index, item] of (portfolio.recommendations || []).entries()) {
+    if (!window.PortfolioQuality.publicRecord(item, "recommendation")) continue;
+    const attachment = await attachmentMarkup(item.file || item, item.authorName || `Recommendation ${index + 1}`, "Recommendations");
+    recommendations.push(entry(item.authorName || `Recommendation ${index + 1}`, [item.relationship, item.date].filter(Boolean).join(" \u00b7 "), attachment));
+  }
+
   const tocEntries = [
-    ["About me", "about"],
-    ["Hiring documents", "hiring-documents"],
-    ["Work samples", "work-samples"],
-    ["Industry-recognized credentials", "industry-credentials"],
+    ["About Me", "about"],
+    ["Hiring Documents", "hiring-documents"],
+    ["Work Samples", "work-samples"],
+    ["Industry Credentials", "industry-credentials"],
     ["Accomplishments", "accomplishments"],
-    ["CareerSafe", "careersafe"],
-    ["Supporting academics", "supporting-academics"],
-    ["CEW standards", "cew-standards"],
+    ["Recommendation Letters", "recommendations"],
+    ["CareerSafe Certifications", "careersafe"],
+    ["Supporting Academics", "supporting-academics"],
+    ["CEW Standards", "cew-standards"],
   ].filter(([, id]) => {
-    const sectionId = id;
-    return (
-      sectionId === "about" ||
-      ["hiring-documents", "work-samples", "industry-credentials"].includes(
-        sectionId,
-      ) ||
-      (sectionId === "accomplishments" && accomplishments.length) ||
-      (sectionId === "careersafe" && careerSafe.length) ||
-      (sectionId === "supporting-academics" && academicItems.length) ||
-      (sectionId === "cew-standards" && standards.length)
-    );
+    if (id === "about") return true;
+    if (id === "hiring-documents") return true;
+    if (id === "work-samples") return true;
+    if (id === "industry-credentials") return true;
+    if (id === "accomplishments") return accomplishments.length > 0;
+    if (id === "recommendations") return recommendations.length > 0;
+    if (id === "careersafe") return careerSafe.length > 0;
+    if (id === "supporting-academics") return academicItems.length > 0;
+    if (id === "cew-standards") return standards.length > 0;
+    return false;
   });
   const toc = tocEntries
     .map(([label, id]) => `<a href="#${id}">${esc(label)}</a>`)
     .join("");
-  const hasFile = (value) => Boolean(asFile(value)?.fileRef);
+  const hasFile = (value) => Boolean(value?.publicationStatus === "published" && asFile(value)?.fileRef);
   const checklistItems = [
     {
       label: "About Me introduction",
@@ -373,7 +389,7 @@ async function renderExport(data) {
         <div class="intro-label">INTRODUCTION · ABOUT ME</div>
         <h1>${esc(name || "Your Name")}</h1>
         <p class="career-goal">${esc(goal)}</p>
-        <p class="bio">${esc(bio || "No biography added.")}</p>
+        <p class="bio">${esc(bio)}</p>
         <p class="profile-strengths"><strong>Skills:</strong> ${esc(skills || "Not entered")}<br><strong>Interests:</strong> ${esc(interests || "Not entered")}</p>
         <div class="cover-meta"><span><small>PROGRAM</small><strong>${esc(program)}</strong></span><span><small>GRADUATION</small><strong>${esc(student.graduationYear || "")}</strong></span></div>
       </div>
@@ -386,13 +402,14 @@ async function renderExport(data) {
         <div class="portfolio-checklist"><h3>Section 1 checklist</h3><ul>${checklist}</ul></div>
       </div>
     </nav>
-    ${section("hiring-documents", "Hiring documents", hiringDocuments.join("") || '<p class="empty section-empty">Add your cover letter and current resume here.</p>', true)}
-    ${section("work-samples", "Work samples", `<p class="section-intro">Include at least five samples that show your range and the skills you used.</p>${workSamples.join("") || '<p class="empty section-empty">Add at least five work samples to complete this section.</p>'}`, true)}
-    ${section("industry-credentials", "Industry-recognized credentials", `<p class="section-intro">List each credential with its issuing organization and date.</p>${credentials.join("") || '<p class="empty section-empty">Add industry-recognized certifications, badges, or licenses here.</p>'}`, true)}
+    ${section("hiring-documents", "Hiring Documents", hiringDocuments.join("") || '<p class="empty section-empty">Add your cover letter and current resume here.</p>', true)}
+    ${section("work-samples", "Work Samples", `<p class="section-intro">Include at least five samples that show your range and the skills you used.</p>${workSamples.join("") || '<p class="empty section-empty">Add at least five work samples to complete this section.</p>'}`, true)}
+    ${section("industry-credentials", "Industry Credentials", `<p class="section-intro">List each credential with its issuing organization and date.</p>${credentials.join("") || '<p class="empty section-empty">Add industry-recognized certifications, badges, or licenses here.</p>'}`, true)}
     ${section("accomplishments", "Accomplishments", accomplishments.join(""))}
-    ${section("careersafe", "CareerSafe", careerSafe.join(""))}
-    ${section("supporting-academics", "Supporting academics", academicItems.join(""))}
-    ${section("cew-standards", "CEW standards", standards.join(""))}`;
+    ${section("recommendations", "Recommendation Letters", recommendations.join(""))}
+    ${section("careersafe", "CareerSafe Certifications", careerSafe.join(""))}
+    ${section("supporting-academics", "Supporting Academics", academicItems.join(""))}
+    ${section("cew-standards", "CEW Standards", standards.join(""))}`;
 
   document.getElementById("portfolio").innerHTML = content;
   window.__EXPORT_READY__ = true;

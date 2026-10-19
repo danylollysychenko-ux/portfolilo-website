@@ -140,3 +140,6 @@
 
 .sheet-page-number{white-space:nowrap;font-variant-numeric:tabular-nums}
 
+
+.document-pages[data-preview-state="waiting"]::before{content:"Attachment preview loads as you scroll";display:block;min-height:28px;color:var(--muted);font-size:12px;text-align:center;padding:8px}.document-pages[data-preview-state="loading"]::before{content:"Loading attachment preview…";display:block;min-height:28px;color:var(--muted);font-size:12px;text-align:center;padding:8px}
+

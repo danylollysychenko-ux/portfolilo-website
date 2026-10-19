@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>About Me Preview</title>
     <link rel="stylesheet" href="preview.css" />
-    <script src="./node_modules/jszip/dist/jszip.min.js"></script>
-    <script src="./node_modules/docx-preview/dist/docx-preview.min.js"></script>
+    <script src="portfolio-quality.js"></script>
     <script type="module" src="preview.js"></script>
   </head>
   <body>
@@ -66,6 +65,12 @@
       </header>
       <div class="document-list" id="document-list"></div>
       <footer><span id="documents-footer-name"></span><span>ECTS Career Portfolio</span></footer>
+    </section>
+    <section class="sheet documents-sheet hidden" id="recommendations" aria-labelledby="recommendations-title">
+      <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Recommendations</p>
+      <header class="documents-heading"><p class="label">Recommendations &amp; Contact</p><h1 id="recommendations-title">Recommendations</h1><p class="contents-intro">Letters shared by people who know your work.</p></header>
+      <div class="document-list" id="recommendation-list"></div>
+      <footer><span id="recommendations-footer-name"></span><span>ECTS Career Portfolio</span></footer>
     </section>
     <section class="sheet work-samples-sheet" id="work-samples" aria-labelledby="work-samples-title">
       <p class="eyebrow">ECTS Career Portfolio <span class="rule"></span> Projects</p>

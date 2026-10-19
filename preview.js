@@ -9,12 +9,21 @@ function renderAboutMe(portfolio = {}) {
   const setText = (id, value) => { document.getElementById(id).textContent = value; };
   setText("name", fullName);
   setText("monogram", initials);
-  if (student.profileImage?.previewDataUrl) {
+  if (student.profileImage?.fileRef) {
     const image = document.createElement("img");
     image.className = "profile-photo";
-    image.src = student.profileImage.previewDataUrl;
     image.alt = `${fullName} profile`;
     document.getElementById("monogram").replaceWith(image);
+    window.documentRenderer.loadImage(
+      student.profileImage.fileRef,
+      student.profileImage.fileType,
+    ).then((url) => {
+      image.src = url;
+    }).catch(() => image.replaceWith(Object.assign(document.createElement("div"), {
+      className: "monogram",
+      textContent: initials,
+      "aria-hidden": "true",
+    })));
   }
   setText("goal", about.careerGoal || "");
   document.getElementById("goal").classList.toggle("hidden", !about.careerGoal);
@@ -27,22 +36,17 @@ function renderAboutMe(portfolio = {}) {
   document.getElementById("additional-section").classList.toggle("hidden", !about.additionalInformation);
   setText("footer-name", fullName);
   setText("contents-footer-name", fullName);
-  const sections = Array.isArray(portfolio.tableOfContents) && portfolio.tableOfContents.length
-    ? portfolio.tableOfContents
-    : [
-        { label: "About Me", target: "about-me" },
-        { label: "Portfolio Checklist", target: "portfolio-checklist" },
-        { label: "Cover Letter", target: "cover-letter" },
-        { label: "Resume", target: "resume" },
-        { label: "Standard Application for Employment", target: "standard-application" },
-        { label: "Work Samples", target: "work-samples" },
-        { label: "Industry Credentials", target: "industry-credentials" },
-        { label: "Accomplishments", target: "accomplishments" },
-        { label: "Recommendation Letters", target: "recommendations" },
-        { label: "CareerSafe Certifications", target: "careersafe" },
-        { label: "Supporting Academics", target: "supporting-academics" },
-        { label: "CEW Standards", target: "cew-standards" },
-      ];
+  const sections = [
+    { label: "About Me", target: "about-me" },
+    { label: "Hiring Documents", target: "hiring-documents" },
+    { label: "Work Samples", target: "work-samples" },
+    { label: "Industry Credentials", target: "industry-credentials" },
+    { label: "Accomplishments", target: "accomplishments" },
+    { label: "Recommendation Letters", target: "recommendations" },
+    { label: "CareerSafe Certifications", target: "careersafe" },
+    { label: "Supporting Academics", target: "supporting-academics" },
+    { label: "CEW Standards", target: "cew-standards" },
+  ];
   const contents = document.getElementById("contents-list");
   contents.replaceChildren(...sections.map(({ label, target }) => {
     const item = document.createElement("li");
@@ -84,8 +88,11 @@ window.addEventListener("about-me-data-ready", () => {
   const portfolio = window.__ABOUT_ME_DATA__ || {};
   window.__PREVIEW_READY__ = (async () => {
     try {
+      for (const id of ["hiring-documents", "work-samples", "industry-credentials", "accomplishments", "recommendations", "careersafe", "supporting-academics", "cew-standards"])
+        document.body.append(document.getElementById(id));
       renderAboutMe(portfolio);
       await renderHiringDocuments(portfolio);
+      await renderRecommendations(portfolio);
       await renderWorkSamples(portfolio);
       await renderCredentials(portfolio);
       renderAccomplishments(portfolio);
@@ -107,13 +114,15 @@ function documentFile(value) {
 
 async function renderHiringDocuments(portfolio) {
   const entries = [];
-  const coverLetter = documentFile(portfolio.hiringDocuments?.coverLetter);
-  const resume = documentFile(portfolio.hiringDocuments?.resume);
-  const standardApplication = documentFile(
-    portfolio.hiringDocuments?.standardApplication,
-  );
+  const coverRecord = portfolio.hiringDocuments?.coverLetter;
+  const resumeRecord = portfolio.hiringDocuments?.resume;
+  const coverLetter = coverRecord?.publicationStatus === "published" ? documentFile(coverRecord) : null;
+  const resume = resumeRecord?.publicationStatus === "published" ? documentFile(resumeRecord) : null;
+  const appRecord = portfolio.hiringDocuments?.standardApplication;
+  const academicEmploymentRecord = portfolio.supportingAcademics?.documents?.employment;
+  const standardApplication = appRecord?.publicationStatus === "published" ? documentFile(appRecord) : null;
   const employmentApplication = documentFile(
-    portfolio.supportingAcademics?.documents?.employment,
+    academicEmploymentRecord?.publicationStatus === "published" ? academicEmploymentRecord : null,
   );
   const applicationFile = standardApplication?.fileRef || standardApplication?.fileName
     ? standardApplication
@@ -122,23 +131,14 @@ async function renderHiringDocuments(portfolio) {
     entries.push({ title: "Cover Letter", file: coverLetter });
   if (resume?.fileRef || resume?.fileName)
     entries.push({ title: "Resume", file: resume });
-  for (const [index, attachment] of (portfolio.hiringDocuments?.resume?.attachments || []).entries()) {
+  for (const [index, attachment] of (resume ? resumeRecord?.attachments || [] : []).entries()) {
     const file = documentFile(attachment);
     if (file?.fileRef || file?.fileName)
       entries.push({ title: `Resume attachment ${index + 1}`, file });
   }
   if (applicationFile?.fileRef || applicationFile?.fileName)
     entries.push({ title: "Standard Application", file: applicationFile });
-  for (const [index, recommendation] of (portfolio.recommendations || []).entries()) {
-    const file = documentFile(recommendation?.file || recommendation);
-    if (file?.fileRef || file?.fileName)
-      entries.push({
-        title: recommendation?.authorName
-          ? `Recommendation Letter · ${recommendation.authorName}`
-          : `Recommendation Letter ${index + 1}`,
-        file,
-      });
-  }
+
 
   const list = document.getElementById("document-list");
   document.getElementById("documents-footer-name").textContent =
@@ -179,31 +179,39 @@ async function renderHiringDocuments(portfolio) {
 
   for (const [index, { file }] of entries.entries()) {
     const target = document.getElementById(`document-pages-${index + 1}`);
-    const attachment = portfolio.previewAttachments?.[file.fileRef];
-    if (!attachment?.base64) {
-      target.textContent = "The attached file could not be loaded for preview.";
-      target.classList.add("document-error");
-      continue;
-    }
-    const bytes = Uint8Array.from(atob(attachment.base64), (character) => character.charCodeAt(0));
-    try {
-      await window.documentRenderer.render(
-        {
-          bytes,
-          fileName: attachment.fileName || file.fileName,
-          fileType: attachment.fileType || file.fileType,
-        },
-        target,
-      );
-    } catch (error) {
-      target.textContent = error.message || "This document could not be previewed.";
-      target.classList.add("document-error");
-    }
+    window.documentRenderer.render(file, target);
   }
 }
 
+
+async function renderRecommendations(portfolio) {
+  const records = (portfolio.recommendations || []).filter((item) => window.PortfolioQuality.publicRecord(item, "recommendation"));
+  const section = document.getElementById("recommendations");
+  section.classList.toggle("hidden", records.length === 0);
+  const list = document.getElementById("recommendation-list");
+  document.getElementById("recommendations-footer-name").textContent = document.getElementById("footer-name").textContent;
+  list.replaceChildren(...records.map((record, index) => {
+    const card = document.createElement("article");
+    card.className = "document-card";
+    const heading = document.createElement("header");
+    heading.className = "document-card-heading";
+    const title = document.createElement("h2");
+    title.textContent = record.authorName ? `Recommendation \u00b7 ${record.authorName}` : `Recommendation ${index + 1}`;
+    const file = documentFile(record.file || record);
+    const name = document.createElement("span");
+    name.className = "document-file-name";
+    name.textContent = file?.fileName || "Recommendation letter";
+    heading.append(title, name);
+    const pages = document.createElement("div");
+    pages.className = "document-pages";
+    card.append(heading, pages);
+    if (file?.fileRef) window.documentRenderer.render(file, pages);
+    return card;
+  }));
+}
+
 async function renderWorkSamples(portfolio) {
-  const samples = Array.isArray(portfolio.workSamples) ? portfolio.workSamples : [];
+  const samples = Array.isArray(portfolio.workSamples) ? portfolio.workSamples.filter((item) => window.PortfolioQuality.publicRecord(item, "workSample")) : [];
   const list = document.getElementById("work-sample-list");
   document.getElementById("work-samples-footer-name").textContent =
     document.getElementById("footer-name").textContent;
@@ -302,31 +310,12 @@ async function renderWorkSamples(portfolio) {
     const target = list.children[index].querySelector(".work-sample-attachment");
     const file = documentFile(sample.file);
     if (!file?.fileRef) continue;
-    const attachment = portfolio.previewAttachments?.[file.fileRef];
-    if (!attachment?.base64) {
-      target.textContent = "The attached file could not be loaded for preview.";
-      target.classList.add("document-error");
-      continue;
-    }
-    const bytes = Uint8Array.from(atob(attachment.base64), (character) => character.charCodeAt(0));
-    try {
-      await window.documentRenderer.render(
-        {
-          bytes,
-          fileName: attachment.fileName || file.fileName,
-          fileType: attachment.fileType || file.fileType,
-        },
-        target,
-      );
-    } catch (error) {
-      target.textContent = error.message || "This work sample could not be previewed.";
-      target.classList.add("document-error");
-    }
+    window.documentRenderer.render(file, target);
   }
 }
 
 async function renderCredentials(portfolio) {
-  const credentials = Array.isArray(portfolio.credentials) ? portfolio.credentials : [];
+  const credentials = Array.isArray(portfolio.credentials) ? portfolio.credentials.filter((item) => window.PortfolioQuality.publicRecord(item, "credential")) : [];
   const list = document.getElementById("credential-list");
   document.getElementById("credentials-footer-name").textContent =
     document.getElementById("footer-name").textContent;
@@ -384,26 +373,7 @@ async function renderCredentials(portfolio) {
     const target = list.children[index].querySelector(".credential-attachment");
     const file = documentFile(credential.file);
     if (!file?.fileRef) continue;
-    const attachment = portfolio.previewAttachments?.[file.fileRef];
-    if (!attachment?.base64) {
-      target.textContent = "The certificate file could not be loaded for preview.";
-      target.classList.add("document-error");
-      continue;
-    }
-    const bytes = Uint8Array.from(atob(attachment.base64), (character) => character.charCodeAt(0));
-    try {
-      await window.documentRenderer.render(
-        {
-          bytes,
-          fileName: attachment.fileName || file.fileName,
-          fileType: attachment.fileType || file.fileType,
-        },
-        target,
-      );
-    } catch (error) {
-      target.textContent = error.message || "This certificate could not be previewed.";
-      target.classList.add("document-error");
-    }
+    window.documentRenderer.render(file, target);
   }
 }
 
@@ -421,7 +391,7 @@ function renderAccomplishments(portfolio) {
 
   const populatedGroups = groups.map(([key, title]) => ({
     title,
-    entries: Array.isArray(data[key]) ? data[key].filter(Boolean) : [],
+    entries: Array.isArray(data[key]) ? data[key].filter((item) => window.PortfolioQuality.publicRecord(typeof item === "string" ? { title: item, publicationStatus: "published" } : item, "achievement")) : [],
   })).filter((group) => group.entries.length);
 
   if (!populatedGroups.length) {
@@ -471,7 +441,8 @@ async function renderCareerSafe(portfolio) {
     ? data.entries
     : Object.entries(data)
         .filter(([key]) => /^careerSafe\d+$/.test(key))
-        .map(([, entry], index) => ({ ...entry, category: String(index + 1) }));
+        .map(([, entry], index) => ({ ...entry, category: String(index + 1) }))
+    .filter((entry) => window.PortfolioQuality.publicRecord({ ...entry, title: entry.selectedOption }, "careerSafe"));
   const list = document.getElementById("careersafe-list");
   document.getElementById("careersafe-footer-name").textContent =
     document.getElementById("footer-name").textContent;
@@ -529,26 +500,7 @@ async function renderCareerSafe(portfolio) {
     const target = list.children[index].querySelector(".careersafe-attachment");
     const file = documentFile(entry.certificate);
     if (!file?.fileRef) continue;
-    const attachment = portfolio.previewAttachments?.[file.fileRef];
-    if (!attachment?.base64) {
-      target.textContent = "The certificate file could not be loaded for preview.";
-      target.classList.add("document-error");
-      continue;
-    }
-    const bytes = Uint8Array.from(atob(attachment.base64), (character) => character.charCodeAt(0));
-    try {
-      await window.documentRenderer.render(
-        {
-          bytes,
-          fileName: attachment.fileName || file.fileName,
-          fileType: attachment.fileType || file.fileType,
-        },
-        target,
-      );
-    } catch (error) {
-      target.textContent = error.message || "This CareerSafe certificate could not be previewed.";
-      target.classList.add("document-error");
-    }
+    window.documentRenderer.render(file, target);
   }
 }
 
@@ -573,6 +525,7 @@ async function renderSupportingAcademics(portfolio) {
     title,
     record: documents[key],
   })).filter(({ record }) => {
+    if (!window.PortfolioQuality.publicRecord(record, "academic")) return false;
     const file = documentFile(record);
     return Boolean(file?.fileRef || file?.fileName || record?.description?.trim());
   });
@@ -640,26 +593,7 @@ async function renderSupportingAcademics(portfolio) {
     const target = list.children[index].querySelector(".academic-attachment");
     const file = documentFile(record);
     if (!file?.fileRef) continue;
-    const attachment = portfolio.previewAttachments?.[file.fileRef];
-    if (!attachment?.base64) {
-      target.textContent = "The academic document could not be loaded for preview.";
-      target.classList.add("document-error");
-      continue;
-    }
-    const bytes = Uint8Array.from(atob(attachment.base64), (character) => character.charCodeAt(0));
-    try {
-      await window.documentRenderer.render(
-        {
-          bytes,
-          fileName: attachment.fileName || file.fileName,
-          fileType: attachment.fileType || file.fileType,
-        },
-        target,
-      );
-    } catch (error) {
-      target.textContent = error.message || "This academic document could not be previewed.";
-      target.classList.add("document-error");
-    }
+    window.documentRenderer.render(file, target);
   }
 }
 
@@ -784,6 +718,7 @@ function updateContentsPageNumbers() {
   const pageBySection = new Map();
   let nextPage = 1;
   for (const sheet of document.querySelectorAll(".sheet")) {
+    if (sheet.classList.contains("hidden")) continue;
     pageBySection.set(sheet.id, nextPage);
     const pageCount = sheetPageCount(sheet);
     nextPage += pageCount;
@@ -828,6 +763,8 @@ document.getElementById("print-button").addEventListener("click", async (event) 
   button.disabled = true;
   button.textContent = "Preparing…";
   try {
+    await window.documentRenderer.loadAll();
+    updateContentsPageNumbers();
     const printed = await window.portfolioDesktop?.printPreview();
     if (printed === false) return;
     if (printed !== true) throw new Error("Printing is available in the desktop app.");
@@ -839,4 +776,15 @@ document.getElementById("print-button").addEventListener("click", async (event) 
   }
 });
 
-window.addEventListener("resize", updateContentsPageNumbers);
+let pageNumberUpdateQueued = false;
+function schedulePageNumberUpdate() {
+  if (pageNumberUpdateQueued) return;
+  pageNumberUpdateQueued = true;
+  requestAnimationFrame(() => {
+    pageNumberUpdateQueued = false;
+    updateContentsPageNumbers();
+  });
+}
+
+window.addEventListener("resize", schedulePageNumberUpdate);
+document.addEventListener("document-preview-rendered", schedulePageNumberUpdate);
