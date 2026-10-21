@@ -29,6 +29,17 @@ const asFile = (value) =>
 const extensionOf = (value = "") =>
   String(value).toLowerCase().split(".").pop();
 
+const displayPortfolioDate = (value) => {
+  const match = typeof value === "string" && value.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+  if (!match) return value || "";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    ...(match[3] ? { day: "numeric" } : {}),
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3] || 1))));
+};
+
 const attachmentMarkup = async (
   value,
   label,
@@ -93,7 +104,10 @@ const attachmentMarkup = async (
   }
 
   if (mime.startsWith("image/")) {
-    const image = `<img src="data:${mime};base64,${attachment.base64}" alt="${esc(fileName)}">`;
+    const imageStyle = options.imageStyle
+      ? ` style="${esc(options.imageStyle)}"`
+      : "";
+    const image = `<img src="data:${mime};base64,${attachment.base64}" alt="${esc(fileName)}"${imageStyle}>`;
     if (label === "Profile photograph") return image;
     return `<div class="attachment-card ${cardClass}"><div class="attachment-preview">${image}</div><div class="attachment-caption"><span class="attachment-status">First page shown</span></div></div>`;
   }
@@ -112,9 +126,9 @@ const entry = (title, description, attachmentHTML, className = "") =>
     ? `<article class="portfolio-entry ${className}"><h3>${esc(title)}</h3>${description ? `<p>${esc(description)}</p>` : ""}${attachmentHTML}</article>`
     : "";
 
-const section = (id, heading, content, pageStart = false) =>
+const section = (id, heading, content, pageStart = false, studentName = "", programName = "") =>
   content
-    ? `<section class="export-section${pageStart ? " export-section--page-start" : ""}" id="${esc(id)}"><div class="section-divider"><span>${["hiring-documents", "work-samples", "industry-credentials"].includes(id) ? "SECTION 1" : "ECTS CAREER PORTFOLIO"}</span><span>${esc(heading)}</span></div><h2>${esc(heading)}</h2>${content}</section>`
+    ? `<div class="section-cover"><div class="section-cover-brand">ECTS · CAREER PORTFOLIO</div><div class="section-cover-main"><div class="section-cover-label">Portfolio section</div><h1>${esc(heading)}</h1><div class="section-cover-rule"></div></div><div class="section-cover-footer"><span>${esc(studentName || "Career Portfolio")}</span><span>${esc(programName)}</span></div></div><section class="export-section${pageStart ? " export-section--page-start" : ""}" id="${esc(id)}"><div class="section-divider"><span>${["hiring-documents", "work-samples", "industry-credentials"].includes(id) ? "SECTION 1" : "ECTS CAREER PORTFOLIO"}</span><span>${esc(heading)}</span></div><h2>${esc(heading)}</h2>${content}</section>`
     : "";
 
 async function renderExport(data) {
@@ -134,6 +148,9 @@ async function renderExport(data) {
         student.profileImage,
         "Profile photograph",
         "About me",
+      {
+        imageStyle: `transform-origin:center;transform:translate(${(50 - Number(student.profileImagePosition?.x ?? 50)) * 0.5}%, ${(50 - Number(student.profileImagePosition?.y ?? 50)) * 0.5}%) scale(1.5)`,
+      },
       )
     : "";
   const profilePhoto = profileImage
@@ -186,7 +203,7 @@ async function renderExport(data) {
     credentials.push(
       entry(
         item.name || "Industry credential",
-        [item.organization, item.date, item.description]
+        [item.organization, displayPortfolioDate(item.date), item.description]
           .filter(Boolean)
           .join(" · "),
         attachment,
@@ -195,7 +212,7 @@ async function renderExport(data) {
   }
 
   const accomplishments = [];
-  for (const [kind, items] of Object.entries(portfolio.accomplishments || {})) {
+  for (const [kind, items] of [["awards", portfolio.accomplishments?.awards || []]]) {
     if (!Array.isArray(items)) continue;
     for (const item of items) {
       if (!window.PortfolioQuality.publicRecord(item, "achievement")) continue;
@@ -229,7 +246,7 @@ async function renderExport(data) {
     careerSafe.push(
       entry(
         item.selectedOption || "CareerSafe certification",
-        [item.category, item.completionDate, item.notes]
+        [item.category, displayPortfolioDate(item.completionDate), item.notes]
           .filter(Boolean)
           .join(" · "),
         attachment,
@@ -310,7 +327,7 @@ async function renderExport(data) {
     ["Hiring Documents", "hiring-documents"],
     ["Work Samples", "work-samples"],
     ["Industry Credentials", "industry-credentials"],
-    ["Accomplishments", "accomplishments"],
+    ["Awards", "accomplishments"],
     ["Recommendation Letters", "recommendations"],
     ["CareerSafe Certifications", "careersafe"],
     ["Supporting Academics", "supporting-academics"],
@@ -402,14 +419,14 @@ async function renderExport(data) {
         <div class="portfolio-checklist"><h3>Section 1 checklist</h3><ul>${checklist}</ul></div>
       </div>
     </nav>
-    ${section("hiring-documents", "Hiring Documents", hiringDocuments.join("") || '<p class="empty section-empty">Add your cover letter and current resume here.</p>', true)}
-    ${section("work-samples", "Work Samples", `<p class="section-intro">Include at least five samples that show your range and the skills you used.</p>${workSamples.join("") || '<p class="empty section-empty">Add at least five work samples to complete this section.</p>'}`, true)}
-    ${section("industry-credentials", "Industry Credentials", `<p class="section-intro">List each credential with its issuing organization and date.</p>${credentials.join("") || '<p class="empty section-empty">Add industry-recognized certifications, badges, or licenses here.</p>'}`, true)}
-    ${section("accomplishments", "Accomplishments", accomplishments.join(""))}
-    ${section("recommendations", "Recommendation Letters", recommendations.join(""))}
-    ${section("careersafe", "CareerSafe Certifications", careerSafe.join(""))}
-    ${section("supporting-academics", "Supporting Academics", academicItems.join(""))}
-    ${section("cew-standards", "CEW Standards", standards.join(""))}`;
+    ${section("hiring-documents", "Hiring Documents", hiringDocuments.join("") || '<p class="empty section-empty">Add your cover letter and current resume here.</p>', false, name, program)}
+    ${section("work-samples", "Work Samples", `<p class="section-intro">Include at least five samples that show your range and the skills you used.</p>${workSamples.join("") || '<p class="empty section-empty">Add at least five work samples to complete this section.</p>'}`, false, name, program)}
+    ${section("industry-credentials", "Industry Credentials", `<p class="section-intro">List each credential with its issuing organization and date.</p>${credentials.join("") || '<p class="empty section-empty">Add industry-recognized certifications, badges, or licenses here.</p>'}`, false, name, program)}
+    ${section("accomplishments", "Awards", accomplishments.join(""), false, name, program)}
+    ${section("recommendations", "Recommendation Letters", recommendations.join(""), false, name, program)}
+    ${section("careersafe", "CareerSafe Certifications", careerSafe.join(""), false, name, program)}
+    ${section("supporting-academics", "Supporting Academics", academicItems.join(""), false, name, program)}
+    ${section("cew-standards", "CEW Standards", standards.join(""), false, name, program)}`;
 
   document.getElementById("portfolio").innerHTML = content;
   window.__EXPORT_READY__ = true;

@@ -1,5 +1,28 @@
 import "./document-preview.js";
 
+function displayPortfolioDate(value) {
+  const match = typeof value === "string" && value.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+  if (!match) return value || "";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    ...(match[3] ? { day: "numeric" } : {}),
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3] || 1))));
+}
+
+function renderMetadata(element, primary, date) {
+  element.className = "work-sample-meta";
+  if (primary) element.append(document.createTextNode(primary));
+  if (date) {
+    if (primary) element.append(document.createTextNode(" · "));
+    const dateLabel = document.createElement("strong");
+    dateLabel.className = "metadata-date";
+    dateLabel.textContent = displayPortfolioDate(date);
+    element.append(dateLabel);
+  }
+}
+
 function renderAboutMe(portfolio = {}) {
   const student = portfolio.student || {};
   const about = portfolio.aboutMe || {};
@@ -13,13 +36,19 @@ function renderAboutMe(portfolio = {}) {
     const image = document.createElement("img");
     image.className = "profile-photo";
     image.alt = `${fullName} profile`;
-    document.getElementById("monogram").replaceWith(image);
+    const position = student.profileImagePosition || { x: 50, y: 50 };
+    image.style.transformOrigin = "center";
+    image.style.transform = profilePositionTransform(position);
+    const frame = document.createElement("div");
+    frame.className = "profile-photo-frame";
+    frame.append(image);
+    document.getElementById("monogram").replaceWith(frame);
     window.documentRenderer.loadImage(
       student.profileImage.fileRef,
       student.profileImage.fileType,
     ).then((url) => {
       image.src = url;
-    }).catch(() => image.replaceWith(Object.assign(document.createElement("div"), {
+    }).catch(() => frame.replaceWith(Object.assign(document.createElement("div"), {
       className: "monogram",
       textContent: initials,
       "aria-hidden": "true",
@@ -41,7 +70,7 @@ function renderAboutMe(portfolio = {}) {
     { label: "Hiring Documents", target: "hiring-documents" },
     { label: "Work Samples", target: "work-samples" },
     { label: "Industry Credentials", target: "industry-credentials" },
-    { label: "Accomplishments", target: "accomplishments" },
+    { label: "Awards", target: "accomplishments" },
     { label: "Recommendation Letters", target: "recommendations" },
     { label: "CareerSafe Certifications", target: "careersafe" },
     { label: "Supporting Academics", target: "supporting-academics" },
@@ -82,6 +111,18 @@ function renderAboutMe(portfolio = {}) {
     document.getElementById(`${key}-section`).classList.toggle("hidden", values.length === 0);
   }
   document.title = `${fullName} | About Me`;
+}
+
+window.portfolioDesktop?.onProfilePositionChanged?.((position) => {
+  const image = document.querySelector("#about-me .profile-photo");
+  if (!image) return;
+  image.style.transform = profilePositionTransform(position);
+});
+
+function profilePositionTransform(position = {}) {
+  const x = Math.max(0, Math.min(100, Number(position.x ?? 50)));
+  const y = Math.max(0, Math.min(100, Number(position.y ?? 50)));
+  return `translate(${(50 - x) * 0.5}%, ${(50 - y) * 0.5}%) scale(1.5)`;
 }
 
 window.addEventListener("about-me-data-ready", () => {
@@ -153,7 +194,9 @@ async function renderHiringDocuments(portfolio) {
 
   list.replaceChildren(...entries.map(({ title, file }, index) => {
     const card = document.createElement("article");
-    card.className = "document-card";
+    card.className = title === "Cover Letter"
+      ? "document-card document-card--cover-letter"
+      : "document-card";
     if (title === "Cover Letter") card.id = "cover-letter";
     else if (title === "Resume") card.id = "resume";
     else if (title === "Standard Application") card.id = "standard-application";
@@ -166,10 +209,7 @@ async function renderHiringDocuments(portfolio) {
     heading.className = "document-card-heading";
     const titleElement = document.createElement("h2");
     titleElement.textContent = title;
-    const fileName = document.createElement("span");
-    fileName.className = "document-file-name";
-    fileName.textContent = file.fileName || "Attached document";
-    heading.append(titleElement, fileName);
+    heading.append(titleElement);
     const pages = document.createElement("div");
     pages.className = "document-pages";
     pages.id = `document-pages-${index + 1}`;
@@ -198,10 +238,7 @@ async function renderRecommendations(portfolio) {
     const title = document.createElement("h2");
     title.textContent = record.authorName ? `Recommendation \u00b7 ${record.authorName}` : `Recommendation ${index + 1}`;
     const file = documentFile(record.file || record);
-    const name = document.createElement("span");
-    name.className = "document-file-name";
-    name.textContent = file?.fileName || "Recommendation letter";
-    heading.append(title, name);
+    heading.append(title);
     const pages = document.createElement("div");
     pages.className = "document-pages";
     card.append(heading, pages);
@@ -234,11 +271,10 @@ async function renderWorkSamples(portfolio) {
     title.textContent = sample.title?.trim() || `Work Sample ${index + 1}`;
     heading.append(title);
 
-    const metadata = [sample.classOrProject, sample.date].filter(Boolean);
+    const metadata = [sample.classOrProject, displayPortfolioDate(sample.date)].filter(Boolean);
     if (metadata.length) {
       const meta = document.createElement("p");
-      meta.className = "work-sample-meta";
-      meta.textContent = metadata.join(" · ");
+      renderMetadata(meta, sample.classOrProject, sample.date);
       heading.append(meta);
     }
     card.append(heading);
@@ -336,11 +372,10 @@ async function renderCredentials(portfolio) {
     const title = document.createElement("h2");
     title.textContent = credential.name?.trim() || `Credential ${index + 1}`;
     heading.append(title);
-    const metadata = [credential.organization, credential.date].filter(Boolean);
+    const metadata = [credential.organization, displayPortfolioDate(credential.date)].filter(Boolean);
     if (metadata.length) {
       const meta = document.createElement("p");
-      meta.className = "work-sample-meta";
-      meta.textContent = metadata.join(" · ");
+      renderMetadata(meta, credential.organization, credential.date);
       heading.append(meta);
     }
     card.append(heading);
@@ -360,7 +395,7 @@ async function renderCredentials(portfolio) {
       attachment.classList.add("credential-has-file");
     } else {
       attachment.textContent = file?.fileName
-        ? `Certificate file unavailable: ${file.fileName}`
+        ? "Certificate file unavailable."
         : "No certificate file attached.";
       attachment.classList.add("work-sample-no-file");
     }
@@ -381,9 +416,6 @@ function renderAccomplishments(portfolio) {
   const data = portfolio.accomplishments || {};
   const groups = [
     ["awards", "Awards"],
-    ["accomplishments", "Accomplishments"],
-    ["extracurriculars", "Extracurricular Activities"],
-    ["serviceExperiences", "Service Experiences"],
   ];
   const list = document.getElementById("accomplishment-list");
   document.getElementById("accomplishments-footer-name").textContent =
@@ -397,7 +429,7 @@ function renderAccomplishments(portfolio) {
   if (!populatedGroups.length) {
     const empty = document.createElement("div");
     empty.className = "documents-empty";
-    empty.textContent = "No accomplishments have been added yet.";
+    empty.textContent = "No awards have been added yet.";
     list.replaceChildren(empty);
     return;
   }
@@ -415,11 +447,10 @@ function renderAccomplishments(portfolio) {
       const itemTitle = document.createElement("h3");
       itemTitle.textContent = item.title?.trim() || `${title} ${index + 1}`;
       card.append(itemTitle);
-      const metadata = [item.organization, item.date].filter(Boolean);
+      const metadata = [item.organization, displayPortfolioDate(item.date)].filter(Boolean);
       if (metadata.length) {
         const meta = document.createElement("p");
-        meta.className = "work-sample-meta";
-        meta.textContent = metadata.join(" · ");
+        renderMetadata(meta, item.organization, item.date);
         card.append(meta);
       }
       if (item.description?.trim()) {
@@ -465,7 +496,7 @@ async function renderCareerSafe(portfolio) {
     heading.append(title);
     const metadata = [];
     if (entry.category) metadata.push(`CareerSafe ${entry.category}`);
-    if (entry.completionDate) metadata.push(entry.completionDate);
+    if (entry.completionDate) metadata.push(displayPortfolioDate(entry.completionDate));
     if (metadata.length) {
       const meta = document.createElement("p");
       meta.className = "work-sample-meta";
@@ -488,7 +519,7 @@ async function renderCareerSafe(portfolio) {
       attachment.dataset.fileRef = file.fileRef;
     } else {
       attachment.textContent = file?.fileName
-        ? `Certificate file unavailable: ${file.fileName}`
+        ? "Certificate file unavailable."
         : "No certificate file attached.";
       attachment.classList.add("work-sample-no-file");
     }
@@ -565,7 +596,7 @@ async function renderSupportingAcademics(portfolio) {
       attachment.dataset.fileRef = file.fileRef;
     } else {
       attachment.textContent = file?.fileName
-        ? `File unavailable: ${file.fileName}`
+        ? "File unavailable."
         : "No file attached.";
       attachment.classList.add("work-sample-no-file");
     }

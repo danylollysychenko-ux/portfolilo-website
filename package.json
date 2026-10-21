@@ -20,6 +20,7 @@
     "files": [
       "index 1.html",
       "style.css",
+      "required-fields.css",
       "script.js",
       "portfolio-quality.js",
       "export.html",

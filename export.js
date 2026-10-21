@@ -126,7 +126,7 @@
     ${section("Hiring documents", hiring || `<p class="empty">No hiring documents attached.</p>`)}
     ${section("Work samples", workSamples.join("") || `<p class="empty">No work samples added.</p>`)}
     ${section("Industry credentials", credentials.join("") || `<p class="empty">No credentials added.</p>`)}
-    ${section("Accomplishments", accomplishments.join("") || `<p class="empty">No accomplishments added.</p>`)}
+    ${section("Awards", accomplishments.join("") || `<p class="empty">No awards added.</p>`)}
     ${section("CareerSafe", careerSafe.join("") || `<p class="empty">No CareerSafe certifications added.</p>`)}
     ${section("Supporting academics", academicItems.join("") || `<p class="empty">No academic evidence added.</p>`)}
     ${section("CEW standards", standards.join("") || `<p class="empty">No CEW evidence added.</p>`)}

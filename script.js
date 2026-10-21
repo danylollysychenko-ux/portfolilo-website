@@ -5,7 +5,7 @@ const navItems = [
   ["documents", "Hiring Documents"],
   ["samples", "Work Samples"],
   ["credentials", "Industry Credentials"],
-  ["accomplishments", "Accomplishments"],
+  ["accomplishments", "Awards"],
   ["careersafe", "CareerSafe"],
   ["academics", "Supporting Academics"],
   ["cew", "CEW Standards"],
@@ -135,6 +135,7 @@ const defaultState = () => ({
     displayName: "",
     graduationYear: "2026",
     profileImage: null,
+    profileImagePosition: { x: 50, y: 50 },
   },
   program: { id: "", name: "", school: "ECTS" },
   theme: "ects-professional",
@@ -642,6 +643,15 @@ function normalizeDate(value) {
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return value;
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+function dateInputValue(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  const normalized = normalizeDate(value.trim());
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+}
+function datePickerNote(value) {
+  if (!value || dateInputValue(value)) return "";
+  return `<small class="date-legacy-note">Saved value: ${esc(value)}. Choose an exact date to replace it.</small>`;
+}
 function normalizePortfolioDates(value) {
   if (Array.isArray(value)) {
     value.forEach(normalizePortfolioDates);
@@ -667,6 +677,8 @@ function save(silent = false) {
         .catch(() => toast("Unable to save the local portfolio file."));
     }
     updateSaveStatus();
+    if ($("#section-nav")) renderNav();
+    if ($("#progress-label")) updateProgress();
     if (!silent) toast("Portfolio saved on this device.");
   } catch {
     toast("Unable to save the portfolio.");
@@ -835,7 +847,93 @@ function render() {
   );
   $("#editor").innerHTML = views[current]();
   bindEditor();
+  markRequiredFields();
+  if (current === "about") loadProfilePositionPreview();
   updateProgress();
+}
+function markRequiredFields() {
+  const selectors = [];
+  const field = (selector) => selectors.push(selector);
+  if (current === "about") {
+    field('[data-bind="student.firstName"]');
+    field('[data-bind="student.lastName"]');
+    field('[data-bind="aboutMe.careerGoal"]');
+    field('[data-bind="aboutMe.biography"]');
+  } else if (current === "documents") {
+    field('[data-file="hiringDocuments.coverLetter.file"]');
+    field('[data-file="hiringDocuments.resume.file"]');
+    field('[data-file="files.recommendations.0.file"]');
+    field('[data-file="files.recommendations.1.file"]');
+  } else if (current === "samples") {
+    for (let index = 0; index < 5; index++) {
+      field(`[data-sample="${index}.title"]`);
+      field(`[data-sample="${index}.description"]`);
+      field(`[data-file="samples.${index}.file"]`);
+    }
+  } else if (current === "credentials") {
+    field('[data-credential="0"]');
+    field('[data-achievement="credentials.0.description"]');
+    field('[data-file="credentials.0.file"]');
+  } else if (current === "accomplishments") {
+    const first = $("[data-entry]");
+    if (first) field(`[data-entry="${first.dataset.entry}"]`);
+  } else if (current === "careersafe") {
+    for (let index = 0; index < 4; index++) {
+      field(`[data-safe-entry="${index}"]`);
+      field(`[data-file="careerSafe.entries.${index}.certificate"]`);
+    }
+  } else if (current === "academics") {
+    for (const key of ["postSecondary", "growth", "reflection1", "reflection2"])
+      field(`[data-file="supportingAcademics.documents.${key}"]`);
+  } else if (current === "cew") {
+    document.querySelectorAll(".cew-card .check-grid").forEach((grid) => grid.classList.add("required-choice"));
+    document.querySelectorAll(".cew-card [data-cew-desc]").forEach((control) => selectors.push(`[data-cew-desc="${control.dataset.cewDesc}"]`));
+  }
+  for (const selector of selectors) {
+    document.querySelectorAll(selector).forEach((control) => {
+      const label = control.closest("label");
+      if (!label || label.querySelector(":scope > .required-star")) return;
+      if (/data-sample="\d+\.(description)|data-file="samples\.\d+\.file|data-achievement="credentials\.0\.description|data-file="credentials\.0\.file/.test(selector))
+        label.title = "Either this field or its paired attachment completes the requirement.";
+      const star = document.createElement("span");
+      star.className = "required-star";
+      star.setAttribute("aria-hidden", "true");
+      star.textContent = " *";
+      label.insertBefore(star, label.firstChild);
+    });
+  }
+  if (selectors.length || current === "cew") {
+    const heading = $("#editor .editor-heading");
+    if (heading) heading.insertAdjacentHTML("beforeend", '<p class="required-legend"><span class="required-star">*</span> Required fields</p>');
+  }
+}
+async function loadProfilePositionPreview() {
+  const image = $("#profile-position-image");
+  const empty = $("#profile-position-empty");
+  if (!image || !empty) return;
+  const profile = state.student.profileImage;
+  const position = state.student.profileImagePosition || { x: 50, y: 50 };
+  image.style.transformOrigin = "center";
+  image.style.transform = profilePositionTransform(position);
+  if (!profile?.fileRef || !window.portfolioDesktop?.readFile) {
+    image.classList.remove("visible");
+    empty.classList.remove("hidden");
+    return;
+  }
+  try {
+    const result = await window.portfolioDesktop.readFile(profile.fileRef);
+    image.src = `data:${profile.fileType || "image/jpeg"};base64,${result.base64}`;
+    image.classList.add("visible");
+    empty.classList.add("hidden");
+  } catch {
+    image.classList.remove("visible");
+    empty.classList.remove("hidden");
+  }
+}
+function profilePositionTransform(position = {}) {
+  const x = Math.max(0, Math.min(100, Number(position.x ?? 50)));
+  const y = Math.max(0, Math.min(100, Number(position.y ?? 50)));
+  return `translate(${(50 - x) * 0.5}%, ${(50 - y) * 0.5}%) scale(1.5)`;
 }
 function aboutView() {
   const s = state.student;
@@ -845,7 +943,7 @@ function aboutView() {
       "About me",
       "Introduce the person behind the work. This page becomes the opening of your portfolio.",
     ) +
-    `<section class="section-card"><div class="field-grid"><label class="field-label">First name<input data-bind="student.firstName" value="${esc(s.firstName)}" placeholder="First name"></label><label class="field-label">Last name<input data-bind="student.lastName" value="${esc(s.lastName)}" placeholder="Last name"></label><label class="field-label">Program<input data-bind="program.name" value="${esc(state.program.customNameEntered ? state.program.name || "" : "")}" placeholder="Type your program"></label><label class="field-label">Graduation year<select data-bind="student.graduationYear"><option ${s.graduationYear === "2026" ? "selected" : ""}>2026</option><option ${s.graduationYear === "2027" ? "selected" : ""}>2027</option><option ${s.graduationYear === "2028" ? "selected" : ""}>2028</option><option ${s.graduationYear === "2029" ? "selected" : ""}>2029</option></select></label><label class="field-label">Career goal<input data-bind="aboutMe.careerGoal" value="${esc(state.aboutMe.careerGoal)}" placeholder="e.g. Software developer"></label><label class="field-label field-full">Short biography<textarea data-bind="aboutMe.biography" placeholder="Write a short introduction about yourself, your interests, and what you hope to do after graduation.">${esc(state.aboutMe.biography)}</textarea></label><label class="field-label">Skills<textarea data-bind="aboutMe.skills" placeholder="Java, problem solving, communication...">${esc(skillNames(state.aboutMe.skills).join(", "))}</textarea></label><label class="field-label">Interests<textarea data-bind="aboutMe.interests" placeholder="What do you enjoy learning or doing?">${esc(state.aboutMe.interests.join(", "))}</textarea></label><label class="field-label field-full">Additional information<textarea data-bind="aboutMe.additionalInformation" placeholder="Anything else you want a reviewer to know.">${esc(state.aboutMe.additionalInformation)}</textarea></label></div></section><section class="section-card"><h2>Profile image</h2><p>Optional. Use a clear, professional image. It stays on this device.</p>${fileUpload("profile", "Choose image", "student.image")}</section>`
+    `<section class="section-card"><div class="field-grid"><label class="field-label">First name<input data-bind="student.firstName" value="${esc(s.firstName)}" placeholder="First name"></label><label class="field-label">Last name<input data-bind="student.lastName" value="${esc(s.lastName)}" placeholder="Last name"></label><label class="field-label">Program<input data-bind="program.name" value="${esc(state.program.customNameEntered ? state.program.name || "" : "")}" placeholder="Type your program"></label><label class="field-label">Graduation year<select data-bind="student.graduationYear"><option ${s.graduationYear === "2026" ? "selected" : ""}>2026</option><option ${s.graduationYear === "2027" ? "selected" : ""}>2027</option><option ${s.graduationYear === "2028" ? "selected" : ""}>2028</option><option ${s.graduationYear === "2029" ? "selected" : ""}>2029</option></select></label><label class="field-label">Career goal<input data-bind="aboutMe.careerGoal" value="${esc(state.aboutMe.careerGoal)}" placeholder="e.g. Software developer"></label><label class="field-label field-full">Short biography<textarea data-bind="aboutMe.biography" placeholder="Write a short introduction about yourself, your interests, and what you hope to do after graduation.">${esc(state.aboutMe.biography)}</textarea></label><label class="field-label">Skills<textarea data-bind="aboutMe.skills" placeholder="Java, problem solving, communication...">${esc(skillNames(state.aboutMe.skills).join(", "))}</textarea></label><label class="field-label">Interests<textarea data-bind="aboutMe.interests" placeholder="What do you enjoy learning or doing?">${esc(state.aboutMe.interests.join(", "))}</textarea></label><label class="field-label field-full">Additional information<textarea data-bind="aboutMe.additionalInformation" placeholder="Anything else you want a reviewer to know.">${esc(state.aboutMe.additionalInformation)}</textarea></label></div></section><section class="section-card"><h2>Profile image</h2><p>Optional. Keep Portfolio Preview open while adjusting the crop; the profile image updates there as you move the sliders.</p>${fileUpload("profile", "Choose image", "student.image")}<div class="profile-position-controls"><div class="profile-position-preview"><img id="profile-position-image" alt="Profile picture crop preview"><span id="profile-position-empty">Upload a profile image to adjust its position.</span></div><div><label class="field-label">Horizontal position<input type="range" min="0" max="100" value="${Number(state.student.profileImagePosition?.x ?? 50)}" data-profile-position="x"><small>Move the image left or right.</small></label><label class="field-label">Vertical position<input type="range" min="0" max="100" value="${Number(state.student.profileImagePosition?.y ?? 50)}" data-profile-position="y"><small>Move the image up or down.</small></label></div></div></section>`
   );
 }
 function portfolioChecklistItems() {
@@ -883,12 +981,7 @@ function portfolioChecklistItems() {
   const recommendations = state.recommendations || [];
   const safeEntries = state.careerSafe.entries || [];
   const standards = Object.values(state.cewStandards || {});
-  const accomplishments = [
-    ...(state.accomplishments.awards || []),
-    ...(state.accomplishments.accomplishments || []),
-    ...(state.accomplishments.extracurriculars || []),
-    ...(state.accomplishments.serviceExperiences || []),
-  ];
+  const accomplishments = state.accomplishments.awards || [];
   const items = [
     { id: "about", label: "About Me", done: aboutComplete, group: "about", target: "about-me" },
     { id: "contents", label: "Table of Contents", done: true, group: "contents", target: "table-of-contents" },
@@ -915,7 +1008,7 @@ function portfolioChecklistItems() {
           target: "industry-credentials",
         }))
       : [{ id: "credential-1", label: "Industry Credential", done: false, group: "credentials", target: "industry-credentials" }]),
-    { id: "accomplishments", label: "Accomplishments", done: accomplishments.some((entry) => hasText(typeof entry === "string" ? entry : entry?.title)), group: "accomplishments", target: "accomplishments" },
+    { id: "accomplishments", label: "Awards", done: accomplishments.some((entry) => hasText(typeof entry === "string" ? entry : entry?.title)), group: "accomplishments", target: "accomplishments" },
     ...Array.from({ length: Math.max(2, recommendations.length) }, (_, index) => ({
       id: `recommendation-${index + 1}`,
       label: `Recommendation Letter ${index + 1}`,
@@ -963,7 +1056,7 @@ function portfolioContents() {
     ["Hiring Documents", "hiring-documents"],
     ["Work Samples", "work-samples"],
     ["Industry Credentials", "industry-credentials"],
-    ["Accomplishments", "accomplishments"],
+    ["Awards", "accomplishments"],
     ["Recommendation Letters", "recommendations"],
     ["CareerSafe Certifications", "careersafe"],
     ["Supporting Academics", "supporting-academics"],
@@ -1009,7 +1102,7 @@ function fileUpload(key, label, bind) {
       : state.files[key] || state.student.image;
   if (value && typeof value === "object")
     value = value.fileName || value.name || "";
-  return `<div class="upload-box"><div><strong>${value ? "File attached" : "No file attached"}</strong><small>${isProfileImage ? "PNG, JPG, JPEG, GIF, or WEBP image" : "PDF, DOC, DOCX, or image"} · stored locally</small></div><label class="upload-label">${label}<input type="file" data-file="${path}" accept="${accept}"></label></div>${value ? `<div class="file-item"><span>${esc(value)}</span><button type="button" data-remove-file="${path}">Remove</button></div>` : ""}`;
+  return `<div class="upload-box"><div><strong>${value ? "File attached" : "No file attached"}</strong><small>${isProfileImage ? "PNG, JPG, JPEG, GIF, or WEBP image" : "PDF, DOC, DOCX, or image"} · drag a file here or browse</small></div><label class="upload-label">${label}<input type="file" data-file="${path}" accept="${accept}"></label></div>${value ? `<div class="file-item"><span>${esc(value)}</span><button type="button" data-remove-file="${path}">Remove</button></div>` : ""}`;
 }
 function documentsView() {
   return (
@@ -1018,8 +1111,15 @@ function documentsView() {
       "Hiring documents",
       "Collect the documents that help an employer understand your readiness.",
     ) +
-    `<section class="section-card"><h2>Cover letter</h2><p>A focused letter that connects your skills to an opportunity.</p>${fileUpload("cover", "Upload cover letter")}${publicationControl(state.hiringDocuments.coverLetter, "hiringDocuments.coverLetter", "document")}</section><section class="section-card"><h2>Resume</h2><p>Keep your resume current and easy to scan.</p>${fileUpload("resume", "Upload resume")}${publicationControl(state.hiringDocuments.resume, "hiringDocuments.resume", "document")}</section><section class="section-card"><h2>Recommendation letters</h2><p>At least 2 letters are required. Add more when you have them.</p>${recommendations()}</section>`
+    `<section class="section-card"><h2>Cover letter</h2><p>A focused letter that connects your skills to an opportunity.</p>${fileUpload("cover", "Upload cover letter")}${publicationControl(state.hiringDocuments.coverLetter, "hiringDocuments.coverLetter", "document")}</section><section class="section-card"><h2>Resume</h2><p>Keep your resume current and easy to scan.</p>${fileUpload("resume", "Upload resume")}${resumeAttachments()}${publicationControl(state.hiringDocuments.resume, "hiringDocuments.resume", "document")}</section><section class="section-card"><h2>Recommendation letters</h2><p>At least 2 letters are required. Add more when you have them.</p>${recommendations()}</section>`
   );
+}
+function resumeAttachments() {
+  const attachments = state.hiringDocuments.resume?.attachments || [];
+  if (!attachments.length) return "";
+  return `<div class="file-list resume-attachment-list"><strong>Resume attachments</strong>${attachments
+    .map((attachment, index) => `<div class="file-item"><span>${esc(attachment?.fileName || `Resume attachment ${index + 1}`)}</span><button type="button" data-remove-resume-attachment="${index}">Remove</button></div>`)
+    .join("")}</div>`;
 }
 function publicationControl(record, key, kind) {
   const issues = window.PortfolioQuality?.issues(kind, record) || [];
@@ -1030,7 +1130,7 @@ function recommendations() {
   const r = state.files.recommendations || [];
   return `<div>${[0, 1, ...Array.from({ length: Math.max(0, r.length - 2) }, (_, i) => i + 2)].map((i) => {
     const record = r[i] || (r[i] = { id: id("recommendation"), authorName: "", relationship: "", date: "", file: null });
-    return `<div class="repeater"><div class="repeater-header"><strong>Recommendation ${i + 1}</strong>${i > 1 ? `<button class="remove-button" data-remove-rec="${i}">Remove</button>` : ""}</div><div class="field-grid"><label class="field-label">Author name<input data-recommendation="${i}.authorName" value="${esc(record.authorName || "")}" placeholder=""></label><label class="field-label">Relationship<input data-recommendation="${i}.relationship" value="${esc(record.relationship || "")}" placeholder=""></label><label class="field-label">Date<input type="date" data-recommendation="${i}.date" value="${esc(normalizeDate(record.date || ""))}"></label></div>${fileUpload("recommendations", "Upload letter", "files.recommendations." + i + ".file")}${publicationControl(record, `recommendations.${i}`, "recommendation")}</div>`;
+    return `<div class="repeater"><div class="repeater-header"><strong>Recommendation ${i + 1}</strong>${i > 1 ? `<button class="remove-button" data-remove-rec="${i}">Remove</button>` : ""}</div><div class="field-grid"><label class="field-label">Author name<input data-recommendation="${i}.authorName" value="${esc(record.authorName || "")}" placeholder=""></label><label class="field-label">Relationship<input data-recommendation="${i}.relationship" value="${esc(record.relationship || "")}" placeholder=""></label><label class="field-label">Date<input type="date" data-recommendation="${i}.date" value="${esc(dateInputValue(record.date))}">${datePickerNote(record.date)}</label></div>${fileUpload("recommendations", "Upload letter", "files.recommendations." + i + ".file")}${publicationControl(record, `recommendations.${i}`, "recommendation")}</div>`;
   }).join("")}</div><button class="add-button" data-add="recommendation">+ Add recommendation</button><p class="microcopy">${r.filter((record) => record?.file?.fileRef || record?.file?.fileName).length} of 2 required recommendations uploaded.</p>`;
 }
 function samplesView() {
@@ -1040,7 +1140,7 @@ function samplesView() {
       "Work samples",
       `Add at least 5 projects. You can include more to show range and growth.`,
     ) +
-    `${state.samples.length < 5 ? '<div class="warning"><strong>Add ' + (5 - state.samples.length) + " more work sample" + (5 - state.samples.length === 1 ? "" : "s") + " to meet the requirement.</strong></div>" : ""}<section class="section-card">${state.samples.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Work sample ${i + 1}</strong><button class="remove-button" data-remove-sample="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-sample="${i}.title" value="${esc(x.title)}" placeholder="e.g. Java Calculator"></label><label class="field-label">Date<input data-sample="${i}.date" value="${esc(x.date)}" placeholder="Month, year"></label><label class="field-label">Class / project<input data-sample="${i}.classOrProject" value="${esc(x.classOrProject)}" placeholder="e.g. Programming II"></label><label class="field-label">Skills demonstrated<input data-sample="${i}.skills" value="${esc(sampleSkillsText(x))}" placeholder="Java, problem solving"></label><label class="field-label field-full">Description<textarea data-sample="${i}.description" placeholder="What did you build, and what did you learn?">${esc(x.description)}</textarea></label><label class="field-label field-full">Reflection<textarea data-sample="${i}.reflection" placeholder="What did this project teach you?">${esc(x.reflection)}</textarea></label><label class="field-label field-full">Optional link<input data-sample="${i}.link" value="${esc(x.link)}" placeholder="https://..."></label></div>${fileUpload("sample" + i, "Attach work sample", "samples." + i + ".file")}${publicationControl(x, `samples.${i}`, "workSample")}</div>`).join("")}<button class="add-button" data-add="sample">+ Add work sample</button></section>`
+    `${state.samples.length < 5 ? '<div class="warning"><strong>Add ' + (5 - state.samples.length) + " more work sample" + (5 - state.samples.length === 1 ? "" : "s") + " to meet the requirement.</strong></div>" : ""}<section class="section-card">${state.samples.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Work sample ${i + 1}</strong><button class="remove-button" data-remove-sample="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-sample="${i}.title" value="${esc(x.title)}" placeholder="e.g. Java Calculator"></label><label class="field-label">Date<input type="date" data-sample="${i}.date" value="${esc(dateInputValue(x.date))}">${datePickerNote(x.date)}</label><label class="field-label">Class / project<input data-sample="${i}.classOrProject" value="${esc(x.classOrProject)}" placeholder="e.g. Programming II"></label><label class="field-label">Skills demonstrated<input data-sample="${i}.skills" value="${esc(sampleSkillsText(x))}" placeholder="Java, problem solving"></label><label class="field-label field-full">Description<textarea data-sample="${i}.description" placeholder="What did you build, and what did you learn?">${esc(x.description)}</textarea></label><label class="field-label field-full">Reflection<textarea data-sample="${i}.reflection" placeholder="What did this project teach you?">${esc(x.reflection)}</textarea></label><label class="field-label field-full">Optional link<input data-sample="${i}.link" value="${esc(x.link)}" placeholder="https://..."></label></div>${fileUpload("sample" + i, "Attach work sample", "samples." + i + ".file")}${publicationControl(x, `samples.${i}`, "workSample")}</div>`).join("")}<button class="add-button" data-add="sample">+ Add work sample</button></section>`
   );
 }
 function credentialsView() {
@@ -1050,34 +1150,23 @@ function credentialsView() {
       "Industry credentials",
       "Add recognized certifications, badges, and training that support your career goal.",
     ) +
-    `<section class="section-card"><h2>Credentials</h2><p>Upload certificates or add a short description of each credential.</p>${state.credentials.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Credential ${i + 1}</strong><button class="remove-button" data-remove-credential="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Name<input data-credential="${i}" value="${esc(x.name)}" placeholder="e.g. Java certification"></label><label class="field-label">Organization<input data-achievement="credentials.${i}.organization" value="${esc(x.organization)}" placeholder="Issuing organization"></label><label class="field-label">Date<input data-achievement="credentials.${i}.date" value="${esc(x.date)}" placeholder="Month, year"></label><label class="field-label">Description<textarea data-achievement="credentials.${i}.description" placeholder="What does this credential represent?">${esc(x.description)}</textarea></label></div>${fileUpload("", x.file?.fileName ? "Replace certificate" : "Choose file", "credentials." + i + ".file")}${publicationControl(x, `credentials.${i}`, "credential")}</div>`).join("")}<button class="add-button" data-add="credential">+ Add credential</button></section>`
+    `<section class="section-card"><h2>Credentials</h2><p>Upload certificates or add a short description of each credential.</p>${state.credentials.map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Credential ${i + 1}</strong><button class="remove-button" data-remove-credential="${i}">Remove</button></div><div class="field-grid"><label class="field-label">Name<input data-credential="${i}" value="${esc(x.name)}" placeholder="e.g. Java certification"></label><label class="field-label">Organization<input data-achievement="credentials.${i}.organization" value="${esc(x.organization)}" placeholder="Issuing organization"></label><label class="field-label">Date<input type="date" data-achievement="credentials.${i}.date" value="${esc(dateInputValue(x.date))}">${datePickerNote(x.date)}</label><label class="field-label">Description<textarea data-achievement="credentials.${i}.description" placeholder="What does this credential represent?">${esc(x.description)}</textarea></label></div>${fileUpload("", x.file?.fileName ? "Replace certificate" : "Choose file", "credentials." + i + ".file")}${publicationControl(x, `credentials.${i}`, "credential")}</div>`).join("")}<button class="add-button" data-add="credential">+ Add credential</button></section>`
   );
 }
 function accomplishmentsView() {
   const groups = [
     ["awards", "Awards", "Recognition you have received."],
-    ["accomplishments", "Accomplishments", "Milestones you are proud of."],
-    [
-      "activities",
-      "Extracurricular activities",
-      "Clubs, teams, and leadership.",
-    ],
-    [
-      "service",
-      "Service experiences",
-      "Ways you have contributed to your community.",
-    ],
   ];
   return (
     heading(
       "06 · Your momentum",
-      "Accomplishments",
-      "Make the progress behind your portfolio visible.",
+      "Awards",
+      "Show the recognition you have received.",
     ) +
     groups
       .map(
         ([key, title, desc]) =>
-          `<section class="section-card"><h2>${title}</h2><p>${desc}</p>${state.accomplishments[key].map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Entry ${i + 1}</strong><button class="remove-button" data-remove-entry="${key}.${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-entry="${key}.${i}" value="${esc(x.title || x)}" placeholder="e.g. Honor Roll"></label><label class="field-label">Organization<input data-achievement="${key}.${i}.organization" value="${esc(x.organization)}" placeholder="Organization or class"></label><label class="field-label">Date<input data-achievement="${key}.${i}.date" value="${esc(x.date)}" placeholder="Month, year"></label><label class="field-label">Description<textarea data-achievement="${key}.${i}.description" placeholder="What did this experience mean to you?">${esc(x.description)}</textarea></label></div>${publicationControl(x, `accomplishments.${key}.${i}`, "achievement")}</div>`).join("")}<button class="add-button" data-add="${key}">+ Add ${title.toLowerCase().replace("experiences", "experience").replace("activities", "activity")}</button></section>`,
+          `<section class="section-card"><h2>${title}</h2><p>${desc}</p>${state.accomplishments[key].map((x, i) => `<div class="repeater"><div class="repeater-header"><strong>Award ${i + 1}</strong><button class="remove-button" data-remove-entry="${key}.${i}">Remove</button></div><div class="field-grid"><label class="field-label">Title<input data-entry="${key}.${i}" value="${esc(typeof x === "string" ? x : x?.title || "")}" placeholder="e.g. Honor Roll"></label><label class="field-label">Organization<input data-achievement="${key}.${i}.organization" value="${esc(x.organization)}" placeholder="Organization or class"></label><label class="field-label">Date<input type="date" data-achievement="${key}.${i}.date" value="${esc(dateInputValue(x.date))}">${datePickerNote(x.date)}</label><label class="field-label">Description<textarea data-achievement="${key}.${i}.description" placeholder="What does this award recognize?">${esc(x.description)}</textarea></label></div>${publicationControl(x, `accomplishments.${key}.${i}`, "achievement")}</div>`).join("")}<button class="add-button" data-add="${key}">+ Add award</button></section>`,
       )
       .join("")
   );
@@ -1337,6 +1426,9 @@ function bindEditor() {
   document
     .querySelectorAll("[data-remove-file]")
     .forEach((el) => (el.onclick = () => removeFile(el.dataset.removeFile)));
+  document.querySelectorAll("[data-remove-resume-attachment]").forEach((el) =>
+    (el.onclick = () => removeResumeAttachment(Number(el.dataset.removeResumeAttachment))),
+  );
   document.querySelectorAll("[data-theme]").forEach(
     (el) =>
       (el.onclick = () => {
@@ -1498,6 +1590,15 @@ function removeFile(path) {
   save(true);
   render();
 }
+function removeResumeAttachment(index) {
+  const attachments = state.hiringDocuments?.resume?.attachments;
+  if (!Array.isArray(attachments) || !Number.isInteger(index) || index < 0 || index >= attachments.length) return;
+  const [attachment] = attachments.splice(index, 1);
+  const store = portfolioStore();
+  if (attachment?.fileRef && store) store.removeFile(attachment.fileRef);
+  save(true);
+  render();
+}
 function closeMenu() {
   $("#sidebar").classList.remove("open");
 }
@@ -1511,6 +1612,11 @@ function ensurePortableShape(portfolio) {
     return hasContent ? "published" : "draft";
   };
   portfolio.student = { ...defaults.student, ...(portfolio.student || {}) };
+  portfolio.student.profileImagePosition = {
+    x: 50,
+    y: 50,
+    ...(portfolio.student.profileImagePosition || {}),
+  };
   portfolio.program = { ...defaults.program, ...(portfolio.program || {}) };
   portfolio.aboutMe = { ...defaults.aboutMe, ...(portfolio.aboutMe || {}) };
   portfolio.theme ??= defaults.theme;
@@ -1533,6 +1639,10 @@ function ensurePortableShape(portfolio) {
     achievementData.serviceExperiences,
     portfolio.service,
   );
+  for (const legacyCategory of ["accomplishments", "extracurriculars", "serviceExperiences"]) {
+    achievementData.awards = mergeAchievementRecords(achievementData.awards, achievementData[legacyCategory]);
+    achievementData[legacyCategory] = [];
+  }
   delete achievementData["0"];
   portfolio.accomplishments = achievementData;
   delete portfolio.awards;
@@ -1719,8 +1829,8 @@ function ensurePortableShape(portfolio) {
   }
   for (const record of portfolio.recommendations) record.date = normalizeDate(record.date);
   normalizePortfolioDates(portfolio);
-  const dateOrder = (record) => /^\d{4}-\d{2}-\d{2}$/.test(record?.date || "")
-    ? Date.parse(`${record.date}T00:00:00Z`)
+  const dateOrder = (record) => /^\d{4}-\d{2}(?:-\d{2})?$/.test(record?.date || "")
+    ? Date.parse(`${record.date.length === 7 ? `${record.date}-01` : record.date}T00:00:00Z`)
     : Number.NEGATIVE_INFINITY;
   const sortNewestFirst = (a, b) => dateOrder(b) - dateOrder(a);
   portfolio.workSamples.sort(sortNewestFirst);
@@ -1771,7 +1881,7 @@ function careerSafeView() {
     entries
       .map(
         (item, index) =>
-          `<section class="section-card"><div class="repeater-header"><div><p class="section-kicker">CareerSafe evidence ${index + 1}</p><h2>Certification details</h2></div>${index > 3 ? `<button class="remove-button" data-remove-safe="${index}">Remove</button>` : ""}</div><div class="field-grid"><label class="field-label">Area or category<select data-safe-category="${index}"><option value="">Choose an area</option>${["1", "2", "3", "4"].map((category) => `<option value="${category}" ${item.category === category ? "selected" : ""}>CareerSafe ${category}</option>`).join("")}</select></label><label class="field-label">Certification<select data-safe-entry="${index}"><option value="">Choose a certification</option>${choices.map((choice) => `<option ${item.selectedOption === choice ? "selected" : ""}>${choice}</option>`).join("")}</select></label><label class="field-label">Completion date<input data-safe-date="${index}" value="${esc(item.completionDate || "")}" placeholder="Month, year"></label></div>${fileUpload("", item.certificate?.fileName ? "Replace certificate" : "Upload certificate", "careerSafe.entries." + index + ".certificate")}<label class="field-label">Notes<textarea data-safe-notes="${index}" placeholder="Optional context about this certification.">${esc(item.notes || "")}</textarea></label>${publicationControl(item, `careerSafe.${index}`, "careerSafe")}</section>`,
+          `<section class="section-card"><div class="repeater-header"><div><p class="section-kicker">CareerSafe evidence ${index + 1}</p><h2>Certification details</h2></div>${index > 3 ? `<button class="remove-button" data-remove-safe="${index}">Remove</button>` : ""}</div><div class="field-grid"><label class="field-label">Area or category<select data-safe-category="${index}"><option value="">Choose an area</option>${["1", "2", "3", "4"].map((category) => `<option value="${category}" ${item.category === category ? "selected" : ""}>CareerSafe ${category}</option>`).join("")}</select></label><label class="field-label">Certification<select data-safe-entry="${index}"><option value="">Choose a certification</option>${choices.map((choice) => `<option ${item.selectedOption === choice ? "selected" : ""}>${choice}</option>`).join("")}</select></label><label class="field-label">Completion date<input type="date" data-safe-date="${index}" value="${esc(dateInputValue(item.completionDate))}">${datePickerNote(item.completionDate)}</label></div>${fileUpload("", item.certificate?.fileName ? "Replace certificate" : "Upload certificate", "careerSafe.entries." + index + ".certificate")}<label class="field-label">Notes<textarea data-safe-notes="${index}" placeholder="Optional context about this certification.">${esc(item.notes || "")}</textarea></label>${publicationControl(item, `careerSafe.${index}`, "careerSafe")}</section>`,
       )
       .join("") +
     '<button class="add-button" data-add="careerSafe">+ Add another CareerSafe entry</button>'
@@ -1793,7 +1903,7 @@ function academicsView() {
     academicUpload("employers", "Potential employers") +
     academicUpload("education", "Post-secondary education opportunities") +
     academicUpload("home", "Home school reflection (optional)") +
-    `<section class="section-card"><h2>Checkoffs</h2><p>Editable sign-off fields for your portfolio review.</p><div class="field-grid"><label class="field-label">Instructional assistant name<input data-bind="academics.iaName" value="${esc(a.instructionalAssistant?.name || "")}"></label><label class="field-label">Date<input data-bind="academics.iaDate" value="${esc(a.instructionalAssistant?.date || "")}"></label><label class="field-label">Instructor name<input data-bind="academics.instructorName" value="${esc(a.instructor?.name || "")}"></label><label class="field-label">Date<input data-bind="academics.instructorDate" value="${esc(a.instructor?.date || "")}"></label></div></section>`
+    `<section class="section-card"><h2>Checkoffs</h2><p>Editable sign-off fields for your portfolio review.</p><div class="field-grid"><label class="field-label">Instructional assistant name<input data-bind="academics.iaName" value="${esc(a.instructionalAssistant?.name || "")}"></label><label class="field-label">Date<input type="date" data-bind="academics.iaDate" value="${esc(dateInputValue(a.instructionalAssistant?.date))}">${datePickerNote(a.instructionalAssistant?.date)}</label><label class="field-label">Instructor name<input data-bind="academics.instructorName" value="${esc(a.instructor?.name || "")}"></label><label class="field-label">Date<input type="date" data-bind="academics.instructorDate" value="${esc(dateInputValue(a.instructor?.date))}">${datePickerNote(a.instructor?.date)}</label></div></section>`
   );
 }
 function addPortableBindings() {
@@ -1803,6 +1913,33 @@ function addPortableBindings() {
     document
       .querySelectorAll("[data-file]")
       .forEach((el) => (el.onchange = () => portableFileHandler(el)));
+    document.querySelectorAll("[data-profile-position]").forEach((el) => {
+      el.oninput = () => {
+        const axis = el.dataset.profilePosition;
+        state.student.profileImagePosition[axis] = Number(el.value);
+        const image = $("#profile-position-image");
+        if (image) image.style.transform = profilePositionTransform(state.student.profileImagePosition);
+        window.portfolioDesktop?.updateProfilePosition?.(state.student.profileImagePosition);
+        save(true);
+      };
+    });
+    document.querySelectorAll(".upload-box").forEach((zone) => {
+      zone.ondragover = (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        zone.classList.add("drag-over");
+      };
+      zone.ondragleave = (event) => {
+        if (!zone.contains(event.relatedTarget)) zone.classList.remove("drag-over");
+      };
+      zone.ondrop = (event) => {
+        event.preventDefault();
+        zone.classList.remove("drag-over");
+        const input = zone.querySelector("[data-file]");
+        const file = event.dataTransfer.files?.[0];
+        if (input && file) portableFileHandler(input, file);
+      };
+    });
     document.querySelectorAll("[data-safe-category]").forEach(
       (el) =>
         (el.onchange = () => {
@@ -1863,8 +2000,8 @@ function addPortableBindings() {
     }
   });
 }
-async function portableFileHandler(el) {
-  const file = el.files[0];
+async function portableFileHandler(el, droppedFile = null) {
+  const file = droppedFile || el.files[0];
   if (!file) return;
   const extension = (file.name || "").toLowerCase().split(".").pop();
   const isProfileImage = el.dataset.file === "student.image";

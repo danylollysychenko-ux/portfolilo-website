@@ -293,7 +293,7 @@ async function renderExport(data) {
     ["Hiring documents", "hiring-documents"],
     ["Work samples", "work-samples"],
     ["Industry credentials", "industry-credentials"],
-    ["Accomplishments", "accomplishments"],
+    ["Awards", "accomplishments"],
     ["CareerSafe", "careersafe"],
     ["Supporting academics", "supporting-academics"],
     ["CEW standards", "cew-standards"],
@@ -320,7 +320,7 @@ async function renderExport(data) {
     ${section("Hiring documents", hiringDocuments.join(""), "hiring-documents")}
     ${section("Work samples", workSamples.join(""), "work-samples")}
     ${section("Industry credentials", credentials.join(""), "industry-credentials")}
-    ${section("Accomplishments", accomplishments.join(""), "accomplishments")}
+    ${section("Awards", accomplishments.join(""), "accomplishments")}
     ${section("CareerSafe", careerSafe.join(""), "careersafe")}
     ${section("Supporting academics", academicItems.join(""), "supporting-academics")}
     ${section("CEW standards", standards.join(""), "cew-standards")}

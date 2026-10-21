@@ -22,6 +22,7 @@ const portfolioPath = () => path.join(dataDirectory(), "portfolio.json");
 const uploadsPath = () => path.join(dataDirectory(), "files");
 const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024;
 const PDF_MARGIN_INCHES = 0.75;
+const previewWindowsByOwner = new Map();
 
 function crc32(buffer) {
   let crc = 0xffffffff;
@@ -133,7 +134,10 @@ function unzip(buffer) {
 function walkFileReferences(value, callback, seen = new Set()) {
   if (!value || typeof value !== "object" || seen.has(value)) return;
   seen.add(value);
-  if (typeof value.fileRef === "string") callback(value);
+  // Empty fileRef fields are used by the editor to represent a removed or
+  // not-yet-uploaded attachment. They are metadata, not stored files, and must
+  // not be included in archive export/import reference processing.
+  if (typeof value.fileRef === "string" && value.fileRef.trim()) callback(value);
   for (const child of Object.values(value))
     walkFileReferences(child, callback, seen);
 }
@@ -308,7 +312,7 @@ app.whenReady().then(() => {
   ipcMain.handle("portfolio:clear-current", async () =>
     fs.rm(dataDirectory(), { recursive: true, force: true }),
   );
-  ipcMain.handle("portfolio:preview", async (_, portfolio, contents) => {
+  ipcMain.handle("portfolio:preview", async (event, portfolio, contents) => {
     const student = portfolio.student || {};
     const studentName = [student.firstName, student.lastName]
       .filter(Boolean)
@@ -328,6 +332,14 @@ app.whenReady().then(() => {
         preload: path.join(__dirname, "preload.cjs"),
       },
     });
+    const ownerId = event.sender.id;
+    if (!previewWindowsByOwner.has(ownerId)) previewWindowsByOwner.set(ownerId, new Set());
+    const ownedPreviews = previewWindowsByOwner.get(ownerId);
+    ownedPreviews.add(previewWindow);
+    previewWindow.on("closed", () => {
+      ownedPreviews.delete(previewWindow);
+      if (!ownedPreviews.size) previewWindowsByOwner.delete(ownerId);
+    });
     previewWindow.on("page-title-updated", (event) => event.preventDefault());
     await previewWindow.loadFile(path.join(__dirname, "preview.html"));
     await previewWindow.webContents.executeJavaScript(`(async () => {
@@ -336,6 +348,14 @@ app.whenReady().then(() => {
       await window.__PREVIEW_READY__;
     })()`);
     return true;
+  });
+  ipcMain.on("portfolio:update-profile-position", (event, position = {}) => {
+    const x = Math.max(0, Math.min(100, Number(position.x) || 0));
+    const y = Math.max(0, Math.min(100, Number(position.y) || 0));
+    for (const previewWindow of previewWindowsByOwner.get(event.sender.id) || []) {
+      if (!previewWindow.isDestroyed())
+        previewWindow.webContents.send("portfolio:profile-position", { x, y });
+    }
   });
   ipcMain.handle("portfolio:print-preview", async (event) => {
     const contents = event.sender;
