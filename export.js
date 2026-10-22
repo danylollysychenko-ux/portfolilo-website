@@ -105,7 +105,10 @@
             fileSection(entry, entry.title || item.title, entry.fileName),
           )
           .join("");
-        return `<h3>${esc(item.id || "CEW")}: ${esc(item.title || "Standard")}</h3><p>${esc(item.explanation || item.description || "")}</p>${evidence}`;
+        const attachment = item.evidenceFile?.fileName
+          ? `<p>Evidence file: ${esc(item.evidenceFile.fileName)}</p>`
+          : "";
+        return `<h3>${esc(item.id || "CEW")}: ${esc(item.title || "Standard")}</h3><p>${esc(item.explanation || item.description || "")}</p>${attachment}${evidence}`;
       },
     );
     const hiring = [

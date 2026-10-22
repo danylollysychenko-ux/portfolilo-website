@@ -248,6 +248,13 @@ async function renderExport(data) {
   const standards = [];
   for (const item of Object.values(portfolio.cewStandards || {})) {
     const evidence = [];
+    const standardAttachment = await renderAttachment(
+      item.evidenceFile,
+      item.evidenceFile?.fileName || `${item.id || "CEW"} evidence`,
+      item.evidenceFile?.fileName || `${item.id || "CEW"} evidence`,
+      "CEW standards",
+    );
+    if (standardAttachment) evidence.push(standardAttachment);
     for (const entry of item.evidence || []) {
       const attachmentMarkup = await renderAttachment(
         entry,

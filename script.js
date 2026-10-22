@@ -883,11 +883,12 @@ function markRequiredFields() {
       field(`[data-file="careerSafe.entries.${index}.certificate"]`);
     }
   } else if (current === "academics") {
-    for (const key of ["postSecondary", "growth", "reflection1", "reflection2"])
+    for (const key of ["postSecondary", "growth", "reflection1", "reflection2", "employment", "employers", "education"])
       field(`[data-file="supportingAcademics.documents.${key}"]`);
   } else if (current === "cew") {
     document.querySelectorAll(".cew-card .check-grid").forEach((grid) => grid.classList.add("required-choice"));
     document.querySelectorAll(".cew-card [data-cew-desc]").forEach((control) => selectors.push(`[data-cew-desc="${control.dataset.cewDesc}"]`));
+    document.querySelectorAll(".cew-card [data-file]").forEach((control) => selectors.push(`[data-file="${control.dataset.file}"]`));
   }
   for (const selector of selectors) {
     document.querySelectorAll(selector).forEach((control) => {
@@ -968,11 +969,11 @@ function portfolioChecklistItems() {
     ["growth", "Co-op / SkillsUSA / ECTS growth reflection"],
     ["reflection1", "ATD / field trip reflection 1"],
     ["reflection2", "ATD / field trip reflection 2"],
+    ["employment", "Standard application for employment"],
+    ["employers", "Potential employers"],
+    ["education", "Post-secondary education opportunities"],
   ];
   const otherAcademicDocuments = [
-    ["employment", "Standard application for employment", true],
-    ["employers", "Potential employers", true],
-    ["education", "Post-secondary education opportunities", true],
     ["home", "Home school reflection", true],
   ];
   const samples = state.workSamples || [];
@@ -1043,7 +1044,7 @@ function portfolioChecklistItems() {
     ...standards.map((standard) => ({
       id: `cew-${standard.id}`,
       label: `CEW ${standard.id} ${standard.title}`,
-      done: Boolean(standard.evidence?.length && hasText(standard.explanation)),
+      done: Boolean(standard.evidence?.length && hasText(standard.explanation) && hasAttachment(standard.evidenceFile)),
       group: "cew",
       target: "cew-standards",
     })),
@@ -1274,7 +1275,7 @@ function cewView() {
     standards
       .map(
         (s, i) =>
-          `<section class="section-card cew-card"><h2>${s}</h2><div class="check-grid">${evidence.map((e) => `<label><input type="checkbox" data-cew="${i}" value="${e}" ${state.cew[i].selected.includes(e) ? "checked" : ""}>${e}</label>`).join("")}</div><label class="field-label">Evidence explanation<textarea data-cew-desc="${i}" placeholder="Explain how your portfolio demonstrates this standard.">${esc(state.cew[i].description)}</textarea></label></section>`,
+          `<section class="section-card cew-card"><h2>${s}</h2><div class="check-grid">${evidence.map((e) => `<label><input type="checkbox" data-cew="${i}" value="${e}" ${state.cew[i].selected.includes(e) ? "checked" : ""}>${e}</label>`).join("")}</div><label class="field-label">Evidence explanation<textarea data-cew-desc="${i}" placeholder="Explain how your portfolio demonstrates this standard.">${esc(state.cew[i].description)}</textarea></label><label class="field-label">Upload evidence file</label>${fileUpload("", "Choose evidence file", `cewStandards.${["standard131", "standard132", "standard133", "standard134"][i]}.evidenceFile`)}</section>`,
       )
       .join("")
   );
