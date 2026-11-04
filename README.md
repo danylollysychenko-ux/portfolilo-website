@@ -22,13 +22,13 @@ Use **Save Portfolio** to create a `.ects-portfolio` ZIP file. It includes `port
 ## Portfolio contents
 
 - Guided setup and ECTS program selector
-- About Me, hiring documents, work samples, credentials, accomplishments, CareerSafe, supporting academics, and CEW evidence
+- About Me, hiring documents, work samples, credentials, accomplishments, CareerSafe, supporting academics
 - Local file attachments, listed in their portfolio section and in the preview; PDFs are shown inline in the preview
 - Portable `.ects-portfolio` open and save workflow
 - Theme and accent controls, live preview, and print to PDF
 
-## Drafts, quality checks, and portfolio order
+## Quality checks and portfolio order
 
-Imported records without a `publicationStatus` are kept as drafts. Drafts remain editable and are omitted from the share preview and PDF until changed to `published`. Each supported record editor shows quality notes (such as missing dates or placeholder copy) before you publish it. The checks flag content for review and preserve the original values.
+Portfolio records are included in the preview by default. Each supported record editor shows quality notes (such as missing dates or placeholder copy) to help improve the content. These notes do not change visibility. Existing `.ects-portfolio` files remain compatible; legacy visibility values are normalized to published.
 
-The preview groups work into About Me, Projects & Work Samples, Resume & Career Documents, Skills/Credentials/Achievements, Education & Career Readiness, and Recommendations & Contact. The JSON record fields and attachment references remain compatible with existing `.ects-portfolio` imports; `publicationStatus` is optional and defaults to `draft` when absent.
+The preview groups work into About Me, Projects & Work Samples, Resume & Career Documents, Skills/Credentials/Achievements, Education & Career Readiness, and Recommendations & Contact. The JSON record fields and attachment references remain compatible with existing `.ects-portfolio` imports; `publicationStatus` is optional and defaults to `published` when absent.

@@ -8,7 +8,6 @@ const navItems = [
   ["accomplishments", "Awards"],
   ["careersafe", "CareerSafe"],
   ["academics", "Supporting Academics"],
-  ["cew", "CEW Standards"],
   ["customize", "Customize"],
 ];
 const PROGRAMS = [
@@ -125,7 +124,7 @@ const achievement = () => ({
   date: "",
   description: "",
   file: null,
-  publicationStatus: "draft",
+  publicationStatus: "published",
 });
 const defaultState = () => ({
   id: id("portfolio"),
@@ -788,8 +787,6 @@ function isSectionDone(id) {
       state.academics.reflection1 &&
       state.academics.reflection2
     );
-  if (id === "cew")
-    return state.cew.every((x) => x.selected.length && x.description);
   return false;
 }
 function progress() {
@@ -811,7 +808,6 @@ function progress() {
       state.academics.reflection1 &&
       state.academics.reflection2
     ),
-    state.cew.every((x) => x.selected.length && x.description),
   ];
   done = checks.filter(Boolean).length;
   return Math.round((done / checks.length) * 100);
@@ -823,7 +819,7 @@ function updateProgress() {
   $("#progress-summary").textContent =
     p === 100
       ? "Portfolio ready to review"
-      : `${8 - Math.round((p / 100) * 8)} required areas still need attention`;
+      : `${7 - Math.round((p / 100) * 7)} required areas still need attention`;
 }
 function heading(kicker, title, desc, actions = "") {
   return `<div class="editor-heading"><div><p class="section-kicker">${kicker}</p><h1>${title}</h1><p>${desc}</p></div><div class="editor-actions">${actions}</div></div>`;
@@ -838,7 +834,6 @@ function render() {
     accomplishments: accomplishmentsView,
     careersafe: careerSafeView,
     academics: academicsView,
-    cew: cewView,
     customize: customizeView,
   };
   document.documentElement.style.setProperty(
@@ -885,11 +880,7 @@ function markRequiredFields() {
   } else if (current === "academics") {
     for (const key of ["postSecondary", "growth", "reflection1", "reflection2", "employment", "employers", "education"])
       field(`[data-file="supportingAcademics.documents.${key}"]`);
-  } else if (current === "cew") {
-    document.querySelectorAll(".cew-card .check-grid").forEach((grid) => grid.classList.add("required-choice"));
-    document.querySelectorAll(".cew-card [data-cew-desc]").forEach((control) => selectors.push(`[data-cew-desc="${control.dataset.cewDesc}"]`));
-    document.querySelectorAll(".cew-card [data-file]").forEach((control) => selectors.push(`[data-file="${control.dataset.file}"]`));
-  }
+}
   for (const selector of selectors) {
     document.querySelectorAll(selector).forEach((control) => {
       const label = control.closest("label");
@@ -903,7 +894,7 @@ function markRequiredFields() {
       label.insertBefore(star, label.firstChild);
     });
   }
-  if (selectors.length || current === "cew") {
+  if (selectors.length) {
     const heading = $("#editor .editor-heading");
     if (heading) heading.insertAdjacentHTML("beforeend", '<p class="required-legend"><span class="required-star">*</span> Required fields</p>');
   }
@@ -981,7 +972,6 @@ function portfolioChecklistItems() {
   const credentials = state.credentials || [];
   const recommendations = state.recommendations || [];
   const safeEntries = state.careerSafe.entries || [];
-  const standards = Object.values(state.cewStandards || {});
   const accomplishments = state.accomplishments.awards || [];
   const items = [
     { id: "about", label: "About Me", done: aboutComplete, group: "about", target: "about-me" },
@@ -1041,13 +1031,7 @@ function portfolioChecklistItems() {
       group: "academics-extra",
       target: "supporting-academics",
     })),
-    ...standards.map((standard) => ({
-      id: `cew-${standard.id}`,
-      label: `CEW ${standard.id} ${standard.title}`,
-      done: Boolean(standard.evidence?.length && hasText(standard.explanation) && hasAttachment(standard.evidenceFile)),
-      group: "cew",
-      target: "cew-standards",
-    })),
+
   ];
   return items;
 }
@@ -1124,8 +1108,7 @@ function resumeAttachments() {
 }
 function publicationControl(record, key, kind) {
   const issues = window.PortfolioQuality?.issues(kind, record) || [];
-  const status = record.publicationStatus === "published" ? "published" : "draft";
-  return `<div class="publication-control"><label class="field-label">Visibility<select data-publication="${key}" aria-label="Publication status"><option value="draft" ${status === "draft" ? "selected" : ""}>Draft</option><option value="published" ${status === "published" ? "selected" : ""}>Published</option></select></label><p class="microcopy">Drafts stay private in portfolio previews. Review each quality note before publishing.</p>${issues.length ? `<ul class="quality-issues">${issues.map((issue) => `<li>${esc(issue)}</li>`).join("")}</ul>` : '<p class="quality-ready">Ready for review.</p>'}</div>`;
+  return `<div class="publication-control"><p class="microcopy">This item is included in your portfolio preview. Review any notes below to improve it.</p>${issues.length ? `<ul class="quality-issues">${issues.map((issue) => `<li>${esc(issue)}</li>`).join("")}</ul>` : '<p class="quality-ready">Ready for your portfolio.</p>'}</div>`;
 }
 function recommendations() {
   const r = state.files.recommendations || [];
@@ -1252,34 +1235,6 @@ function academicsView() {
     `<section class="section-card"><h2>Checkoffs</h2><p>Editable sign-off fields for your portfolio review.</p><div class="field-grid"><label class="field-label">Instructional assistant name<input data-bind="academics.iaName" value="${esc(a.iaName)}"></label><label class="field-label">Date<input data-bind="academics.iaDate" value="${esc(a.iaDate)}"></label><label class="field-label">Instructor name<input data-bind="academics.instructorName" value="${esc(a.instructorName)}"></label><label class="field-label">Date<input data-bind="academics.instructorDate" value="${esc(a.instructorDate)}"></label></div></section>`
   );
 }
-function cewView() {
-  const standards = [
-    "13.1 Career Awareness & Exploration",
-    "13.2 Employability Skills",
-    "13.3 Growth & Advancement",
-    "13.4 Personal Interests & Career Planning",
-  ];
-  const evidence = [
-    "Post-secondary plan",
-    "Career goal",
-    "Potential employers",
-    "Work samples",
-    "Career reflections",
-  ];
-  return (
-    heading(
-      "09 · Future ready",
-      "CEW standards",
-      "Choose evidence and explain how your portfolio demonstrates each standard.",
-    ) +
-    standards
-      .map(
-        (s, i) =>
-          `<section class="section-card cew-card"><h2>${s}</h2><div class="check-grid">${evidence.map((e) => `<label><input type="checkbox" data-cew="${i}" value="${e}" ${state.cew[i].selected.includes(e) ? "checked" : ""}>${e}</label>`).join("")}</div><label class="field-label">Evidence explanation<textarea data-cew-desc="${i}" placeholder="Explain how your portfolio demonstrates this standard.">${esc(state.cew[i].description)}</textarea></label><label class="field-label">Upload evidence file</label>${fileUpload("", "Choose evidence file", `cewStandards.${["standard131", "standard132", "standard133", "standard134"][i]}.evidenceFile`)}</section>`,
-      )
-      .join("")
-  );
-}
 function customizeView() {
   return (
     heading(
@@ -1302,23 +1257,6 @@ function setPath(path, value) {
   else obj[key] = key === "interests" ? splitList(value) : value;
 }
 function bindEditor() {
-  document.querySelectorAll("[data-publication]").forEach((el) => {
-    el.onchange = () => {
-      const [collection, indexText] = el.dataset.publication.split(".");
-      const index = Number(indexText);
-      const record = collection === "samples" ? state.workSamples[index]
-        : collection === "credentials" ? state.credentials[index]
-          : collection === "recommendations" ? state.recommendations[index]
-            : collection === "careerSafe" ? state.careerSafe.entries[index]
-              : collection === "accomplishments" ? state.accomplishments[el.dataset.publication.split(".")[1]][Number(el.dataset.publication.split(".")[2])]
-                : collection === "supportingAcademics" ? state.supportingAcademics.documents[el.dataset.publication.split(".")[2]]
-                : collection === "hiringDocuments" ? state.hiringDocuments[el.dataset.publication.split(".")[1]]
-                  : null;
-      if (record) record.publicationStatus = el.value;
-      save(true);
-      render();
-    };
-  });
   document.querySelectorAll("[data-bind]").forEach(
     (el) =>
       (el.oninput = () => {
@@ -1405,25 +1343,6 @@ function bindEditor() {
         render();
       }),
   );
-  document.querySelectorAll("[data-cew]").forEach(
-    (el) =>
-      (el.onchange = () => {
-        const i = el.dataset.cew;
-        state.cew[i].selected = [
-          ...document.querySelectorAll(`[data-cew="${i}"]:checked`),
-        ].map((x) => x.value);
-        save(true);
-        updateProgress();
-      }),
-  );
-  document.querySelectorAll("[data-cew-desc]").forEach(
-    (el) =>
-      (el.oninput = () => {
-        state.cew[el.dataset.cewDesc].description = el.value;
-        save(true);
-        updateProgress();
-      }),
-  );
   document
     .querySelectorAll("[data-remove-file]")
     .forEach((el) => (el.onclick = () => removeFile(el.dataset.removeFile)));
@@ -1495,7 +1414,7 @@ function addItem(kind) {
       file: null,
       link: "",
       reflection: "",
-      publicationStatus: "draft",
+      publicationStatus: "published",
     });
   else if (kind === "credential")
     state.credentials.push({
@@ -1505,7 +1424,7 @@ function addItem(kind) {
       date: "",
       description: "",
       file: null,
-      publicationStatus: "draft",
+      publicationStatus: "published",
     });
   else if (kind === "recommendation")
     state.recommendations.push({
@@ -1514,7 +1433,7 @@ function addItem(kind) {
       relationship: "",
       date: "",
       file: null,
-      publicationStatus: "draft",
+      publicationStatus: "published",
     });
   else if (kind === "customSection")
     state.settings.customSections.push({
@@ -1606,12 +1525,7 @@ function closeMenu() {
 function ensurePortableShape(portfolio) {
   if (!portfolio || typeof portfolio !== "object") portfolio = defaultState();
   const defaults = defaultState();
-  const migrateExistingVisibility = portfolio.metadata?.publicationMigrationVersion !== 1;
-  const publicationStatus = (record, hasContent) => {
-    if (record?.publicationStatus === "published") return "published";
-    if (record?.publicationStatus === "draft" && !migrateExistingVisibility) return "draft";
-    return hasContent ? "published" : "draft";
-  };
+  const publicationStatus = () => "published";
   portfolio.student = { ...defaults.student, ...(portfolio.student || {}) };
   portfolio.student.profileImagePosition = {
     x: 50,
@@ -1850,7 +1764,7 @@ function academicDocument(key, title) {
       fileType: "",
       fileData: null,
       uploadedAt: null,
-      publicationStatus: "draft",
+      publicationStatus: "published",
     })
   );
 }
@@ -1877,15 +1791,15 @@ function careerSafeView() {
     heading(
       "07 · CareerSafe",
       "CareerSafe certifications",
-      "Add every certification you have completed. You can add multiple entries in the same area.",
+      "Choose a different CareerSafe area for each entry. Areas already used in another entry are unavailable.",
     ) +
     entries
       .map(
         (item, index) =>
-          `<section class="section-card"><div class="repeater-header"><div><p class="section-kicker">CareerSafe evidence ${index + 1}</p><h2>Certification details</h2></div>${index > 3 ? `<button class="remove-button" data-remove-safe="${index}">Remove</button>` : ""}</div><div class="field-grid"><label class="field-label">Area or category<select data-safe-category="${index}"><option value="">Choose an area</option>${["1", "2", "3", "4"].map((category) => `<option value="${category}" ${item.category === category ? "selected" : ""}>CareerSafe ${category}</option>`).join("")}</select></label><label class="field-label">Certification<select data-safe-entry="${index}"><option value="">Choose a certification</option>${choices.map((choice) => `<option ${item.selectedOption === choice ? "selected" : ""}>${choice}</option>`).join("")}</select></label><label class="field-label">Completion date<input type="date" data-safe-date="${index}" value="${esc(dateInputValue(item.completionDate))}">${datePickerNote(item.completionDate)}</label></div>${fileUpload("", item.certificate?.fileName ? "Replace certificate" : "Upload certificate", "careerSafe.entries." + index + ".certificate")}<label class="field-label">Notes<textarea data-safe-notes="${index}" placeholder="Optional context about this certification.">${esc(item.notes || "")}</textarea></label>${publicationControl(item, `careerSafe.${index}`, "careerSafe")}</section>`,
+          `<section class="section-card"><div class="repeater-header"><div><p class="section-kicker">CareerSafe evidence ${index + 1}</p><h2>Certification details</h2></div>${index > 3 ? `<button class="remove-button" data-remove-safe="${index}">Remove</button>` : ""}</div><div class="field-grid"><label class="field-label">Area or category<select data-safe-category="${index}"><option value="">Choose an area</option>${["1", "2", "3", "4"].map((category) => { const usedElsewhere = entries.some((entry, otherIndex) => otherIndex !== index && String(entry.category) === category); return `<option value="${category}" ${item.category === category ? "selected" : ""} ${usedElsewhere ? "disabled" : ""}>CareerSafe ${category}${usedElsewhere && item.category !== category ? " (already selected)" : ""}</option>`; }).join("")}</select></label><label class="field-label">Certification<select data-safe-entry="${index}"><option value="">Choose a certification</option>${choices.map((choice) => `<option ${item.selectedOption === choice ? "selected" : ""}>${choice}</option>`).join("")}</select></label><label class="field-label">Completion date<input type="date" data-safe-date="${index}" value="${esc(dateInputValue(item.completionDate))}">${datePickerNote(item.completionDate)}</label></div>${fileUpload("", item.certificate?.fileName ? "Replace certificate" : "Upload certificate", "careerSafe.entries." + index + ".certificate")}<label class="field-label">Notes<textarea data-safe-notes="${index}" placeholder="Optional context about this certification.">${esc(item.notes || "")}</textarea></label>${publicationControl(item, `careerSafe.${index}`, "careerSafe")}</section>`,
       )
       .join("") +
-    '<button class="add-button" data-add="careerSafe">+ Add another CareerSafe entry</button>'
+    (entries.length < 4 ? '<button class="add-button" data-add="careerSafe">+ Add another CareerSafe entry</button>' : '<p class="microcopy">You have reached the limit of 4 CareerSafe certifications.</p>')
   );
 }
 function academicsView() {
@@ -1947,6 +1861,7 @@ function addPortableBindings() {
           state.careerSafe.entries[+el.dataset.safeCategory].category =
             el.value;
           save(true);
+          render();
         }),
     );
     document.querySelectorAll("[data-safe-entry]").forEach(
@@ -1977,6 +1892,10 @@ function addPortableBindings() {
   const originalAddItem = addItem;
   addItem = function (kind) {
     if (kind === "careerSafe") {
+      if (state.careerSafe.entries.length >= 4) {
+        toast("You can add up to 4 CareerSafe certifications.");
+        return;
+      }
       state.careerSafe.entries.push({
         id: id("career-safe"),
         category: "",
@@ -1984,7 +1903,7 @@ function addPortableBindings() {
         certificate: null,
         completionDate: "",
         notes: "",
-        publicationStatus: "draft",
+        publicationStatus: "published",
       });
       save(true);
       render();
@@ -2179,11 +2098,10 @@ isSectionDone = function (section) {
   if (section === "careersafe")
     return Array.from({ length: 4 }, (_, index) => checklistItemComplete(`careersafe-${index + 1}`)).every(Boolean);
   if (section === "academics") return checklistGroupComplete("academics");
-  if (section === "cew") return checklistGroupComplete("cew");
   return false;
 };
 progress = function () {
-  const checks = ["about", "documents", "samples", "credentials", "accomplishments", "careersafe", "academics", "cew"]
+  const checks = ["about", "documents", "samples", "credentials", "accomplishments", "careersafe", "academics"]
     .map(isSectionDone);
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 };
