@@ -81,7 +81,6 @@
 .academic-attachment section.docx{margin:0 auto 16px!important;box-shadow:0 5px 18px #17324a18!important}
 .academic-checkoffs-card h2{margin:0 0 10px;font:700 19px var(--display)}
 .academic-checkoff-line{margin:6px 0;color:#4e606d}
-.cew-sheet{break-before:page;page-break-before:always}
 .cew-list{display:flex;flex-direction:column;gap:18px}
 .cew-standard-card{min-width:0;padding:18px;border:1px solid var(--line);border-radius:5px;background:#fff;box-shadow:0 5px 16px #17324a0d}
 .cew-standard-card .work-sample-heading h2{font-size:18px}
@@ -131,7 +130,6 @@
   .academic-attachment .attachment-image{max-width:100%;max-height:8.2in;object-fit:contain}
   .academic-attachment .docx-wrapper{max-width:100%;padding:0!important;background:transparent!important;overflow:visible}
   .academic-attachment .docx{zoom:.74!important;box-shadow:none!important}
-  .cew-sheet{break-before:page;page-break-before:always}
   .cew-standard-card{break-inside:avoid;page-break-inside:avoid;padding:12px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
 }
 .contents-list li{gap:10px}

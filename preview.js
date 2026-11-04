@@ -74,7 +74,6 @@ function renderAboutMe(portfolio = {}) {
     { label: "Recommendation Letters", target: "recommendations" },
     { label: "CareerSafe Certifications", target: "careersafe" },
     { label: "Supporting Academics", target: "supporting-academics" },
-    { label: "CEW Standards", target: "cew-standards" },
   ];
   const contents = document.getElementById("contents-list");
   contents.replaceChildren(...sections.map(({ label, target }) => {
@@ -129,7 +128,7 @@ window.addEventListener("about-me-data-ready", () => {
   const portfolio = window.__ABOUT_ME_DATA__ || {};
   window.__PREVIEW_READY__ = (async () => {
     try {
-      for (const id of ["hiring-documents", "work-samples", "industry-credentials", "accomplishments", "recommendations", "careersafe", "supporting-academics", "cew-standards"])
+      for (const id of ["hiring-documents", "work-samples", "industry-credentials", "accomplishments", "recommendations", "careersafe", "supporting-academics"])
         document.body.append(document.getElementById(id));
       renderAboutMe(portfolio);
       await renderHiringDocuments(portfolio);
@@ -139,7 +138,6 @@ window.addEventListener("about-me-data-ready", () => {
       renderAccomplishments(portfolio);
       await renderCareerSafe(portfolio);
       await renderSupportingAcademics(portfolio);
-      renderCewStandards(portfolio);
     } catch (error) {
       console.error("Portfolio preview could not be fully rendered.", error);
     } finally {
@@ -628,75 +626,6 @@ async function renderSupportingAcademics(portfolio) {
   }
 }
 
-function renderCewStandards(portfolio) {
-  const standards = portfolio.cewStandards || {};
-  const definitions = [
-    ["standard131", "13.1", "Career Awareness & Exploration"],
-    ["standard132", "13.2", "Employability Skills"],
-    ["standard133", "13.3", "Growth & Advancement"],
-    ["standard134", "13.4", "Personal Interests & Career Planning"],
-  ];
-  const list = document.getElementById("cew-list");
-  document.getElementById("cew-footer-name").textContent =
-    document.getElementById("footer-name").textContent;
-
-  list.replaceChildren(...definitions.map(([key, id, title]) => {
-    const standard = standards[key] || {};
-    const card = document.createElement("article");
-    card.className = "cew-standard-card";
-    const heading = document.createElement("header");
-    heading.className = "work-sample-heading";
-    const headingTitle = document.createElement("h2");
-    headingTitle.textContent = `${id} · ${standard.title || title}`;
-    heading.append(headingTitle);
-    card.append(heading);
-
-    const evidence = Array.isArray(standard.evidence) ? standard.evidence : [];
-    const evidenceLabels = evidence.map((item) =>
-      typeof item === "string" ? item : item?.portfolioItemType,
-    ).filter(Boolean);
-    const evidenceHeading = document.createElement("p");
-    evidenceHeading.className = "cew-evidence-label";
-    evidenceHeading.textContent = "Portfolio evidence";
-    card.append(evidenceHeading);
-
-    if (evidenceLabels.length) {
-      const chips = document.createElement("ul");
-      chips.className = "chips cew-evidence-list";
-      chips.replaceChildren(...evidenceLabels.map((label) => {
-        const item = document.createElement("li");
-        item.textContent = label;
-        return item;
-      }));
-      card.append(chips);
-    } else {
-      const none = document.createElement("p");
-      none.className = "cew-empty-evidence";
-      none.textContent = "No evidence selected yet.";
-      card.append(none);
-    }
-
-    for (const item of evidence) {
-      if (typeof item !== "object" || !item.description?.trim()) continue;
-      const evidenceNote = document.createElement("p");
-      evidenceNote.className = "cew-evidence-note";
-      const label = document.createElement("strong");
-      label.textContent = `${item.portfolioItemType || "Evidence"}: `;
-      evidenceNote.append(label, document.createTextNode(item.description.trim()));
-      card.append(evidenceNote);
-    }
-
-    const explanation = (standard.explanation || standard.description || "").trim();
-    if (explanation) {
-      const paragraph = document.createElement("p");
-      paragraph.className = "work-sample-description cew-explanation";
-      paragraph.textContent = explanation;
-      card.append(paragraph);
-    }
-    return card;
-  }));
-}
-
 function attachmentPageCount(container) {
   if (!container) return 1;
   return Math.max(
@@ -739,7 +668,6 @@ function sheetPageCount(sheet) {
     case "table-of-contents":
     case "about-me":
     case "accomplishments":
-    case "cew-standards":
     default:
       return estimateFlowPages(sheet);
   }
