@@ -350,11 +350,24 @@ app.whenReady().then(() => {
     return true;
   });
   ipcMain.on("portfolio:update-profile-position", (event, position = {}) => {
-    const x = Math.max(0, Math.min(100, Number(position.x) || 0));
-    const y = Math.max(0, Math.min(100, Number(position.y) || 0));
+    const x = Math.max(0, Math.min(100, Number(position.x ?? 50)));
+    const y = Math.max(0, Math.min(100, Number(position.y ?? 50)));
     for (const previewWindow of previewWindowsByOwner.get(event.sender.id) || []) {
       if (!previewWindow.isDestroyed())
         previewWindow.webContents.send("portfolio:profile-position", { x, y });
+    }
+  });
+  ipcMain.on("portfolio:update-profile-image", (event, profile) => {
+    const nextProfile = profile && safeFileId(profile.fileRef)
+      ? {
+          fileRef: profile.fileRef,
+          fileName: String(profile.fileName || ""),
+          fileType: String(profile.fileType || "image/jpeg"),
+        }
+      : null;
+    for (const previewWindow of previewWindowsByOwner.get(event.sender.id) || []) {
+      if (!previewWindow.isDestroyed())
+        previewWindow.webContents.send("portfolio:profile-image", nextProfile);
     }
   });
   ipcMain.handle("portfolio:print-preview", async (event) => {
@@ -589,14 +602,8 @@ app.whenReady().then(() => {
       return true;
     },
   );
-  ipcMain.handle("portfolio:import-archive", async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog({
-      title: "Open ECTS portfolio",
-      properties: ["openFile"],
-      filters: [{ name: "ECTS Portfolio", extensions: ["ects-portfolio"] }],
-    });
-    if (canceled || !filePaths[0]) return null;
-    const entries = unzip(await fs.readFile(filePaths[0]));
+  async function installPortfolioArchive(buffer) {
+    const entries = unzip(buffer);
     const manifest = JSON.parse(
       entries.get("manifest.json")?.toString("utf8") || "null",
     );
@@ -657,6 +664,19 @@ app.whenReady().then(() => {
       throw error;
     }
     return portfolio;
+  }
+  ipcMain.handle("portfolio:import-archive", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: "Open ECTS portfolio",
+      properties: ["openFile"],
+      filters: [{ name: "ECTS Portfolio", extensions: ["ects-portfolio"] }],
+    });
+    if (canceled || !filePaths[0]) return null;
+    return installPortfolioArchive(await fs.readFile(filePaths[0]));
+  });
+  ipcMain.handle("portfolio:load-example", async () => {
+    const examplePath = path.join(__dirname, "examples", "showcase.ects-portfolio");
+    return installPortfolioArchive(await fs.readFile(examplePath));
   });
   createWindow();
   app.on("activate", () => {

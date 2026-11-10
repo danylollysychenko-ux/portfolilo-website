@@ -15,7 +15,7 @@ function renderMetadata(element, primary, date) {
   element.className = "work-sample-meta";
   if (primary) element.append(document.createTextNode(primary));
   if (date) {
-    if (primary) element.append(document.createTextNode(" · "));
+    if (primary) element.append(document.createTextNode(" Â· "));
     const dateLabel = document.createElement("strong");
     dateLabel.className = "metadata-date";
     dateLabel.textContent = displayPortfolioDate(date);
@@ -23,40 +23,74 @@ function renderMetadata(element, primary, date) {
   }
 }
 
+let profileImageRequest = 0;
+let activeProfileImageUrl = "";
+function updateProfilePicture(profile, fullName, position = { x: 50, y: 50 }) {
+  let monogram = document.getElementById("monogram");
+  if (!monogram) {
+    monogram = document.createElement("div");
+    monogram.className = "monogram";
+    monogram.id = "monogram";
+    monogram.setAttribute("aria-hidden", "true");
+    monogram.textContent = fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  }
+  const currentFrame = document.querySelector("#about-me .profile-photo-frame");
+  if (!profile?.fileRef) {
+    profileImageRequest++;
+    if (activeProfileImageUrl) URL.revokeObjectURL(activeProfileImageUrl);
+    activeProfileImageUrl = "";
+    if (currentFrame) currentFrame.replaceWith(monogram);
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.className = "profile-photo";
+  image.alt = `${fullName} profile`;
+  image.decoding = "async";
+  image.style.transformOrigin = "center";
+  image.style.objectPosition = "center top";
+  image.style.transform = profilePositionTransform(position);
+  const frame = document.createElement("div");
+  frame.className = "profile-photo-frame";
+  frame.dataset.fileRef = profile.fileRef;
+  frame.append(image);
+  (currentFrame || monogram).replaceWith(frame);
+
+  const requestId = ++profileImageRequest;
+  const profileRef = profile.fileRef;
+  const imageType = profile.fileType || "image/jpeg";
+  window.documentRenderer.loadImage(profileRef, imageType).then(async (url) => {
+    if (requestId !== profileImageRequest || !frame.isConnected) {
+      URL.revokeObjectURL(url);
+      return;
+    }
+    image.src = url;
+    await image.decode();
+    const previousUrl = activeProfileImageUrl;
+    activeProfileImageUrl = url;
+    if (previousUrl && previousUrl !== url) URL.revokeObjectURL(previousUrl);
+  }).catch(() => {
+    if (requestId !== profileImageRequest || !frame.isConnected) return;
+    if (activeProfileImageUrl) URL.revokeObjectURL(activeProfileImageUrl);
+    activeProfileImageUrl = "";
+    frame.replaceWith(monogram);
+  });
+}
+
 function renderAboutMe(portfolio = {}) {
   const student = portfolio.student || {};
   const about = portfolio.aboutMe || {};
   const fullName = [student.firstName, student.lastName].filter(Boolean).join(" ").trim()
     || student.displayName || "Your name";
-  const initials = fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "—";
+  const initials = fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "â€”";
   const setText = (id, value) => { document.getElementById(id).textContent = value; };
   setText("name", fullName);
   setText("monogram", initials);
-  if (student.profileImage?.fileRef) {
-    const image = document.createElement("img");
-    image.className = "profile-photo";
-    image.alt = `${fullName} profile`;
-    const position = student.profileImagePosition || { x: 50, y: 50 };
-    image.style.transformOrigin = "center";
-    image.style.transform = profilePositionTransform(position);
-    const frame = document.createElement("div");
-    frame.className = "profile-photo-frame";
-    frame.append(image);
-    document.getElementById("monogram").replaceWith(frame);
-    window.documentRenderer.loadImage(
-      student.profileImage.fileRef,
-      student.profileImage.fileType,
-    ).then((url) => {
-      image.src = url;
-    }).catch(() => frame.replaceWith(Object.assign(document.createElement("div"), {
-      className: "monogram",
-      textContent: initials,
-      "aria-hidden": "true",
-    })));
-  }
+  document.getElementById("monogram").textContent = initials;
+  updateProfilePicture(student.profileImage, fullName, student.profileImagePosition);
   setText("goal", about.careerGoal || "");
   document.getElementById("goal").classList.toggle("hidden", !about.careerGoal);
-  const meta = [portfolio.program?.name, student.graduationYear ? `Class of ${student.graduationYear}` : ""].filter(Boolean).join(" · ");
+  const meta = [portfolio.program?.name, student.graduationYear ? `Class of ${student.graduationYear}` : ""].filter(Boolean).join(" Â· ");
   setText("meta", meta);
   document.getElementById("meta").classList.toggle("hidden", !meta);
   setText("biography", about.biography || "");
@@ -90,7 +124,7 @@ function renderAboutMe(portfolio = {}) {
     labelElement.textContent = label;
     const pageNumber = document.createElement("span");
     pageNumber.className = "page-number";
-    pageNumber.textContent = "—";
+    pageNumber.textContent = "â€”";
     const leader = document.createElement("span");
     leader.className = "contents-leader";
     leader.setAttribute("aria-hidden", "true");
@@ -116,6 +150,16 @@ window.portfolioDesktop?.onProfilePositionChanged?.((position) => {
   const image = document.querySelector("#about-me .profile-photo");
   if (!image) return;
   image.style.transform = profilePositionTransform(position);
+});
+window.portfolioDesktop?.onProfileImageChanged?.((profile) => {
+  const portfolio = window.__ABOUT_ME_DATA__;
+  if (!portfolio) return;
+  portfolio.student = portfolio.student || {};
+  portfolio.student.profileImage = profile;
+  const student = portfolio.student;
+  const fullName = [student.firstName, student.lastName].filter(Boolean).join(" ").trim()
+    || student.displayName || "Your name";
+  updateProfilePicture(profile, fullName, student.profileImagePosition);
 });
 
 function profilePositionTransform(position = {}) {
@@ -498,7 +542,7 @@ async function renderCareerSafe(portfolio) {
     if (metadata.length) {
       const meta = document.createElement("p");
       meta.className = "work-sample-meta";
-      meta.textContent = metadata.join(" · ");
+      meta.textContent = metadata.join(" Â· ");
       heading.append(meta);
     }
     card.append(heading);
@@ -611,7 +655,7 @@ async function renderSupportingAcademics(portfolio) {
     for (const [role, person] of checkoffs) {
       const line = document.createElement("p");
       line.className = "academic-checkoff-line";
-      line.textContent = [role, person.name, person.date].filter(Boolean).join(" · ");
+      line.textContent = [role, person.name, person.date].filter(Boolean).join(" Â· ");
       card.append(line);
     }
     cards.push(card);
@@ -693,7 +737,7 @@ function updateContentsPageNumbers() {
       }
       const lastPage = pageBySection.get(sheet.id) + pageCount - 1;
       pageNumber.textContent = pageCount > 1
-        ? `Pages ${pageBySection.get(sheet.id)}–${lastPage}`
+        ? `Pages ${pageBySection.get(sheet.id)}â€“${lastPage}`
         : `Page ${pageBySection.get(sheet.id)}`;
     }
   }
@@ -713,7 +757,7 @@ function updateContentsPageNumbers() {
   for (const item of document.querySelectorAll("#contents-list li")) {
     const target = item.dataset.target;
     const page = target ? pageBySection.get(target) : null;
-    item.querySelector(".page-number").textContent = page ? String(page) : "—";
+    item.querySelector(".page-number").textContent = page ? String(page) : "â€”";
   }
 }
 
@@ -726,7 +770,7 @@ backToTopButton.addEventListener("click", () => window.scrollTo({ top: 0, behavi
 document.getElementById("print-button").addEventListener("click", async (event) => {
   const button = event.currentTarget;
   button.disabled = true;
-  button.textContent = "Preparing…";
+  button.textContent = "Preparingâ€¦";
   try {
     await window.documentRenderer.loadAll();
     updateContentsPageNumbers();

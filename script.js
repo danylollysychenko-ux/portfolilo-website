@@ -177,36 +177,7 @@ const defaultState = () => ({
     instructionalAssistant: { name: "", date: "" },
     instructor: { name: "", date: "" },
   },
-  cewStandards: {
-    standard131: {
-      id: "13.1",
-      title: "Career Awareness & Exploration",
-      description: "",
-      evidence: [],
-      explanation: "",
-    },
-    standard132: {
-      id: "13.2",
-      title: "Employability Skills",
-      description: "",
-      evidence: [],
-      explanation: "",
-    },
-    standard133: {
-      id: "13.3",
-      title: "Growth & Advancement",
-      description: "",
-      evidence: [],
-      explanation: "",
-    },
-    standard134: {
-      id: "13.4",
-      title: "Personal Interests & Career Planning",
-      description: "",
-      evidence: [],
-      explanation: "",
-    },
-  },
+  cewStandards: {},
   settings: {
     theme: "ects-professional",
     accentColor: "#c97245",
@@ -220,7 +191,6 @@ const defaultState = () => ({
       "credentials",
       "accomplishments",
       "supportingAcademics",
-      "cewStandards",
     ],
     customSections: [],
   },
@@ -234,6 +204,7 @@ const defaultState = () => ({
 });
 let state = loadState();
 let current = "about";
+let profilePreviewCache = null;
 const $ = (s) => document.querySelector(s);
 const esc = (s) =>
   String(s || "").replace(
@@ -400,29 +371,6 @@ function addCompatibilityAliases(portfolio) {
       enumerable: false,
     },
     academics: { value: academics, enumerable: false },
-    cew: {
-      value: Object.values(portfolio.cewStandards).map((item) =>
-        Object.defineProperties(
-          {},
-          {
-            selected: {
-              get: () => item.evidence.map((x) => x.portfolioItemType),
-              set: (value) =>
-                (item.evidence = value.map((x) => ({
-                  portfolioItemType: x,
-                  portfolioItemId: null,
-                  description: "",
-                }))),
-            },
-            description: {
-              get: () => item.explanation,
-              set: (value) => (item.explanation = value),
-            },
-          },
-        ),
-      ),
-      enumerable: false,
-    },
     custom: {
       value: {
         get theme() {
@@ -908,16 +856,43 @@ async function loadProfilePositionPreview() {
   image.style.transformOrigin = "center";
   image.style.transform = profilePositionTransform(position);
   if (!profile?.fileRef || !window.portfolioDesktop?.readFile) {
+    if (profilePreviewCache?.url) URL.revokeObjectURL(profilePreviewCache.url);
+    profilePreviewCache = null;
+    image.removeAttribute("src");
     image.classList.remove("visible");
     empty.classList.remove("hidden");
     return;
   }
   try {
-    const result = await window.portfolioDesktop.readFile(profile.fileRef);
-    image.src = `data:${profile.fileType || "image/jpeg"};base64,${result.base64}`;
+    const fileRef = profile.fileRef;
+    if (profilePreviewCache?.fileRef !== fileRef) {
+      if (profilePreviewCache?.url) URL.revokeObjectURL(profilePreviewCache.url);
+      image.removeAttribute("src");
+      image.classList.remove("visible");
+      empty.classList.remove("hidden");
+      const cache = { fileRef, url: "", promise: null };
+      cache.promise = window.portfolioDesktop.readFile(fileRef).then(async (result) => {
+        const response = await fetch(`data:${profile.fileType || "image/jpeg"};base64,${result.base64}`);
+        const url = URL.createObjectURL(await response.blob());
+        if (profilePreviewCache === cache) cache.url = url;
+        else URL.revokeObjectURL(url);
+        return url;
+      });
+      profilePreviewCache = cache;
+    }
+    const cache = profilePreviewCache;
+    const url = cache.url || await cache.promise;
+    if (state.student.profileImage?.fileRef !== fileRef || profilePreviewCache !== cache) return;
+    image.src = url;
+    await image.decode();
     image.classList.add("visible");
     empty.classList.add("hidden");
   } catch {
+    if (state.student.profileImage?.fileRef !== profile.fileRef) return;
+    if (profilePreviewCache?.fileRef === profile.fileRef) {
+      if (profilePreviewCache.url) URL.revokeObjectURL(profilePreviewCache.url);
+      profilePreviewCache = null;
+    }
     image.classList.remove("visible");
     empty.classList.remove("hidden");
   }
@@ -1045,7 +1020,6 @@ function portfolioContents() {
     ["Recommendation Letters", "recommendations"],
     ["CareerSafe Certifications", "careersafe"],
     ["Supporting Academics", "supporting-academics"],
-    ["CEW Standards", "cew-standards"],
     ...(state.settings?.customSections || [])
       .filter((section) => hasPortfolioText(section.title))
       .map((section, index) => [section.title, `custom-section-${index + 1}`]),
@@ -1488,6 +1462,14 @@ function removeFile(path) {
   const key = parts[parts.length - 1];
   const current = parent[key];
   const store = portfolioStore();
+  if (path === "student.image" || path === "student.profileImage") {
+    if (current?.fileRef) store?.removeFile(current.fileRef);
+    state.student.profileImage = null;
+    store?.updateProfileImage?.(null);
+    save(true);
+    render();
+    return;
+  }
   if (store) {
     const attachment =
       current && typeof current === "object" && "file" in current
@@ -1714,34 +1696,7 @@ function ensurePortableShape(portfolio) {
   for (const entry of portfolio.careerSafe.entries) entry.publicationStatus = publicationStatus(entry, Boolean(entry.selectedOption || entry.certificate?.fileRef || entry.certificate?.fileName || entry.notes));
   for (const record of Object.values(portfolio.supportingAcademics.documents))
     if (record && typeof record === "object") record.publicationStatus = publicationStatus(record, Boolean(record.title || record.description || record.file?.fileRef || record.file?.fileName || record.fileRef || record.fileName));
-  portfolio.cewStandards = {
-    ...defaults.cewStandards,
-    ...(portfolio.cewStandards || {}),
-  };
-  const academicDocuments = portfolio.supportingAcademics.documents;
-  const cewMatches = {
-    "Post-secondary plan": [academicDocuments.postSecondary?.id].filter(Boolean),
-    "Potential employers": [academicDocuments.employers?.id].filter(Boolean),
-    "Work samples": portfolio.workSamples.map((sample) => sample.id).filter(Boolean),
-    "Career reflections": ["growth", "reflection1", "reflection2"]
-      .map((key) => academicDocuments[key]?.id).filter(Boolean),
-    "Career goal": [],
-  };
-  for (const standard of Object.values(portfolio.cewStandards)) {
-    if (!Array.isArray(standard.evidence)) standard.evidence = [];
-    const evidence = [];
-    for (const item of standard.evidence) {
-      const matches = item.portfolioItemId ? [] : cewMatches[item.portfolioItemType] || [];
-      if (!matches.length) {
-        evidence.push(item);
-      } else if (matches.length === 1) {
-        evidence.push({ ...item, portfolioItemId: matches[0] });
-      } else {
-        for (const itemId of matches) evidence.push({ ...item, portfolioItemId: itemId });
-      }
-    }
-    standard.evidence = evidence;
-  }
+  portfolio.cewStandards = portfolio.cewStandards || {};
   for (const record of portfolio.recommendations) record.date = normalizeDate(record.date);
   normalizePortfolioDates(portfolio);
   const dateOrder = (record) => /^\d{4}-\d{2}(?:-\d{2})?$/.test(record?.date || "")
@@ -1965,6 +1920,8 @@ async function portableFileHandler(el, droppedFile = null) {
     else if (target[key] && typeof target[key] === "object")
       Object.assign(target[key], metadata);
     else target[key] = metadata;
+    if (path.join(".") === "student.image")
+      store.updateProfileImage?.(metadata);
     save(true);
     render();
     toast(`${file.name} saved in the app data folder.`);
@@ -2047,7 +2004,7 @@ async function loadBackup() {
     return;
   }
   if (
-    state.student.name &&
+    (state.student.name || state.student.displayName) &&
     !confirm(
       "Open another portfolio and replace the one currently open? Any unsaved changes will be discarded.",
     )
@@ -2062,6 +2019,27 @@ async function loadBackup() {
     toast("Portfolio opened successfully.");
   } catch (error) {
     toast(error.message || "That portfolio file could not be opened.");
+  }
+}
+async function loadDemoPortfolio() {
+  const store = portfolioStore();
+  if (!store?.loadExample) {
+    toast("The fictional demo is available in the desktop app.");
+    return;
+  }
+  if (
+    (state.student.name || state.student.displayName) &&
+    !confirm("Load the fictional demo portfolio? This replaces the portfolio currently open on this device.")
+  ) return;
+  try {
+    const portfolio = await store.loadExample();
+    if (!portfolio) return;
+    state = addCompatibilityAliases(ensurePortableShape(portfolio));
+    save(true);
+    startApp();
+    toast("Fictional demo loaded. All sample people, projects, awards, and credentials are invented.");
+  } catch (error) {
+    toast(error.message || "The fictional demo could not be loaded.");
   }
 }
 function reset() {
@@ -2120,6 +2098,7 @@ document.addEventListener("click", (e) => {
   if (action === "preview") previewPortfolio();
   if (action === "download") downloadBackup();
   if (action === "load") loadBackup();
+  if (action === "demo") loadDemoPortfolio();
   if (action === "print") exportPdf();
   if (action === "menu") $("#sidebar").classList.toggle("open");
   if (action === "requirements") {

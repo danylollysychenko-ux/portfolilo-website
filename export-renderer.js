@@ -245,32 +245,6 @@ async function renderExport(data) {
     }
   }
 
-  const standards = [];
-  for (const item of Object.values(portfolio.cewStandards || {})) {
-    const evidence = [];
-    const standardAttachment = await renderAttachment(
-      item.evidenceFile,
-      item.evidenceFile?.fileName || `${item.id || "CEW"} evidence`,
-      item.evidenceFile?.fileName || `${item.id || "CEW"} evidence`,
-      "CEW standards",
-    );
-    if (standardAttachment) evidence.push(standardAttachment);
-    for (const entry of item.evidence || []) {
-      const attachmentMarkup = await renderAttachment(
-        entry,
-        entry.title || item.title || "CEW evidence",
-        entry.fileName || entry.title || "CEW evidence",
-        "CEW standards",
-      );
-      if (attachmentMarkup) evidence.push(attachmentMarkup);
-    }
-    if (item.explanation || item.description || evidence.length) {
-      standards.push(
-        `<article class="portfolio-entry"><h3>${esc(item.id || "CEW")}: ${esc(item.title || "Standard")}</h3><p>${esc(item.explanation || item.description || "")}</p>${evidence.join("")}</article>`,
-      );
-    }
-  }
-
   const hiringDocuments = [];
   const hiringEntries = [
     ["Cover letter", portfolio.hiringDocuments?.coverLetter],
@@ -303,7 +277,6 @@ async function renderExport(data) {
     ["Awards", "accomplishments"],
     ["CareerSafe", "careersafe"],
     ["Supporting academics", "supporting-academics"],
-    ["CEW standards", "cew-standards"],
   ]
     .map(
       ([label, id]) =>
@@ -330,7 +303,6 @@ async function renderExport(data) {
     ${section("Awards", accomplishments.join(""), "accomplishments")}
     ${section("CareerSafe", careerSafe.join(""), "careersafe")}
     ${section("Supporting academics", academicItems.join(""), "supporting-academics")}
-    ${section("CEW standards", standards.join(""), "cew-standards")}
     <footer class="page-footer"><span>${esc(name || "Student")} · ${esc(program)}</span><span>Page <span class="page-number"></span> of ${state.data?.totalPages || 1}</span></footer>`;
 
   document.getElementById("portfolio").innerHTML = content;

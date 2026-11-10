@@ -16,8 +16,15 @@ contextBridge.exposeInMainWorld("portfolioDesktop", {
     ipcRenderer.invoke("portfolio:preview", portfolio, contents),
   updateProfilePosition: (position) =>
     ipcRenderer.send("portfolio:update-profile-position", position),
+  updateProfileImage: (profile) =>
+    ipcRenderer.send("portfolio:update-profile-image", profile),
   onProfilePositionChanged: (callback) =>
-    ipcRenderer.on("portfolio:profile-position", (_, position) => callback(position)),
+    ipcRenderer.on("portfolio:profile-position", (_, position) =>
+      callback(position),
+    ),
+  onProfileImageChanged: (callback) =>
+    ipcRenderer.on("portfolio:profile-image", (_, profile) => callback(profile)),
   printPreview: () => ipcRenderer.invoke("portfolio:print-preview"),
   importArchive: () => ipcRenderer.invoke("portfolio:import-archive"),
+  loadExample: () => ipcRenderer.invoke("portfolio:load-example"),
 });

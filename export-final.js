@@ -269,36 +269,6 @@ async function renderExport(data) {
     );
   }
 
-  const standards = [];
-  for (const item of Object.values(portfolio.cewStandards || {})) {
-    const attachmentHTML = [];
-    if (item.evidenceFile) {
-      attachmentHTML.push(
-        await attachmentMarkup(
-          item.evidenceFile,
-          item.evidenceFile.fileName || `${item.id || "CEW"} evidence`,
-          "CEW standards",
-        ),
-      );
-    }
-    for (const evidence of item.evidence || []) {
-      attachmentHTML.push(
-        await attachmentMarkup(
-          evidence,
-          evidence.title || item.title || "CEW evidence",
-          "CEW standards",
-        ),
-      );
-    }
-    standards.push(
-      entry(
-        `${item.id || "CEW"}: ${item.title || "Standard"}`,
-        item.explanation || item.description || "",
-        attachmentHTML.join(""),
-      ),
-    );
-  }
-
   const hiringDocuments = [];
   for (const [label, value] of [
     ["Cover letter", portfolio.hiringDocuments?.coverLetter],
@@ -340,7 +310,6 @@ async function renderExport(data) {
     ["Recommendation Letters", "recommendations"],
     ["CareerSafe Certifications", "careersafe"],
     ["Supporting Academics", "supporting-academics"],
-    ["CEW Standards", "cew-standards"],
   ].filter(([, id]) => {
     if (id === "about") return true;
     if (id === "hiring-documents") return true;
@@ -350,7 +319,6 @@ async function renderExport(data) {
     if (id === "recommendations") return recommendations.length > 0;
     if (id === "careersafe") return careerSafe.length > 0;
     if (id === "supporting-academics") return academicItems.length > 0;
-    if (id === "cew-standards") return standards.length > 0;
     return false;
   });
   const toc = tocEntries
@@ -434,8 +402,7 @@ async function renderExport(data) {
     ${section("accomplishments", "Awards", accomplishments.join(""), false, name, program)}
     ${section("recommendations", "Recommendation Letters", recommendations.join(""), false, name, program)}
     ${section("careersafe", "CareerSafe Certifications", careerSafe.join(""), false, name, program)}
-    ${section("supporting-academics", "Supporting Academics", academicItems.join(""), false, name, program)}
-    ${section("cew-standards", "CEW Standards", standards.join(""), false, name, program)}`;
+    ${section("supporting-academics", "Supporting Academics", academicItems.join(""), false, name, program)}`;
 
   document.getElementById("portfolio").innerHTML = content;
   window.__EXPORT_READY__ = true;

@@ -1,0 +1,259 @@
+{
+  "id": "portfolio-demo-showcase",
+  "student": {
+    "firstName": "Demo",
+    "lastName": "Student",
+    "displayName": "Demo Student",
+    "graduationYear": 2027,
+    "profileImagePosition": {
+      "x": 50,
+      "y": 46
+    },
+    "profileImage": {
+      "id": "demo-profile-image",
+      "title": "Illustrated demo profile image",
+      "description": "A fictional, generated illustration for the showcase portfolio.",
+      "uploadedAt": "2025-06-01",
+      "fileName": "demo-profile.png",
+      "fileType": "image/png",
+      "fileRef": "11111111-2222-4333-8444-555555555555"
+    }
+  },
+  "program": {
+    "id": "programming",
+    "name": "Computer Programming (CMP)",
+    "school": "ECTS",
+    "website": "https://www.ects.org/programs/computer-programming/",
+    "customNameEntered": true
+  },
+  "aboutMe": {
+    "careerGoal": "Data Scientist",
+    "biography": "This fictional showcase demonstrates how a Computer Programming student might present projects, technical skills, and a career goal. Replace every demo entry with your own information before sharing.",
+    "skills": [
+      {
+        "id": "demo-skill-python",
+        "name": "Python"
+      },
+      {
+        "id": "demo-skill-javascript",
+        "name": "JavaScript"
+      },
+      {
+        "id": "demo-skill-html",
+        "name": "HTML"
+      },
+      {
+        "id": "demo-skill-css",
+        "name": "CSS"
+      }
+    ],
+    "interests": [
+      "Coding",
+      "Data",
+      "Designing useful tools"
+    ],
+    "additionalInformation": null
+  },
+  "hiringDocuments": {
+    "coverLetter": {
+      "id": "demo-cover-letter",
+      "title": "Cover Letter",
+      "description": null,
+      "uploadedAt": null,
+      "file": null
+    },
+    "resume": {
+      "id": "demo-resume",
+      "title": "Resume",
+      "description": null,
+      "uploadedAt": null,
+      "file": null,
+      "attachments": []
+    },
+    "standardApplication": {
+      "id": "demo-application",
+      "title": "Standard Application",
+      "description": null,
+      "uploadedAt": null,
+      "file": null
+    }
+  },
+  "workSamples": [
+    {
+      "id": "demo-work-climate-explorer",
+      "title": "Climate Data Explorer (Demo)",
+      "description": "A fictional project that reads a small data set, calculates monthly averages, and presents the results in a short report.",
+      "date": "2025-10-14",
+      "classOrProject": "Example programming project",
+      "skills": [
+        "Python",
+        "CSV data",
+        "Data summaries"
+      ],
+      "file": {
+        "fileRef": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "fileName": "climate-data-report.pdf",
+        "fileType": "application/pdf",
+        "uploadedAt": "2025-06-01"
+      },
+      "link": null,
+      "reflection": "Example reflection: organizing the input data first made the summary easier to check.",
+      "notes": null
+    },
+    {
+      "id": "demo-work-portfolio-page",
+      "title": "Portfolio Landing Page (Demo)",
+      "description": "A fictional responsive page concept that organizes a short introduction, skills, and project links.",
+      "date": "2025-09-18",
+      "classOrProject": "Example programming project",
+      "skills": [
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "file": null,
+      "link": null,
+      "reflection": "Example reflection: testing at a narrow screen width helped improve the layout.",
+      "notes": null
+    },
+    {
+      "id": "demo-work-json-reporter",
+      "title": "JSON Reporter (Demo)",
+      "description": "A fictional Python exercise that reads values from JSON and prints a clear console summary.",
+      "date": "2025-08-22",
+      "classOrProject": "Example programming project",
+      "skills": [
+        "Python",
+        "JSON"
+      ],
+      "file": null,
+      "link": null,
+      "reflection": "Example reflection: checking for missing values made the output more reliable.",
+      "notes": null
+    }
+  ],
+  "credentials": [
+    {
+      "id": "demo-credential-data-literacy",
+      "name": "Data Literacy Badge (Demo Only)",
+      "organization": "Example Learning Lab (fictional)",
+      "date": "2025-06-16",
+      "description": "Fictional sample entry to demonstrate how a credential can appear. This is not a real credential.",
+      "file": null
+    }
+  ],
+  "accomplishments": {
+    "awards": [
+      {
+        "id": "demo-award-showcase",
+        "title": "Programming Showcase Recognition (Demo)",
+        "organization": "Example Programming Course (fictional)",
+        "date": "2025-05-20",
+        "description": "Fictional sample award entry for the portfolio demonstration.",
+        "file": null
+      }
+    ],
+    "accomplishments": [
+      {
+        "id": "demo-achievement-attendance",
+        "title": "Attendance Recognition (Demo)",
+        "organization": "Example Program (fictional)",
+        "date": "2025-04-30",
+        "description": "Fictional sample entry showing a second achievement card.",
+        "file": null
+      }
+    ],
+    "extracurriculars": [],
+    "serviceExperiences": []
+  },
+  "recommendations": [],
+  "careerSafe": {
+    "entries": []
+  },
+  "supportingAcademics": {
+    "postSecondaryPlan": {
+      "careerGoal": null,
+      "educationGoal": null,
+      "schools": [],
+      "certifications": [],
+      "plans": null,
+      "additionalInformation": null
+    },
+    "growthReflection": null,
+    "reflections": [],
+    "potentialEmployers": [],
+    "postSecondaryOpportunities": [],
+    "homeSchoolReflection": null,
+    "instructionalAssistant": {
+      "name": "",
+      "date": null
+    },
+    "instructor": {
+      "name": "",
+      "date": null
+    },
+    "documents": {}
+  },
+  "cewStandards": {},
+  "settings": {
+    "theme": "ECTS Professional",
+    "accentColor": "#f36016",
+    "font": "DM Sans",
+    "layout": "standard",
+    "showProfileImage": true,
+    "sectionOrder": [
+      "aboutMe",
+      "hiringDocuments",
+      "workSamples",
+      "credentials",
+      "accomplishments",
+      "recommendations",
+      "careerSafe",
+      "supportingAcademics"
+    ],
+    "customSections": []
+  },
+  "metadata": {
+    "createdAt": "2025-06-01",
+    "updatedAt": "2025-06-01",
+    "lastExportedAt": null,
+    "revision": 1,
+    "description": "Fictional showcase data. Replace all demo entries before sharing.",
+    "tags": [
+      "demo",
+      "showcase",
+      "fictional"
+    ]
+  },
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "11111111-2222-4333-8444-555555555555",
+      "fileRef": "11111111-2222-4333-8444-555555555555",
+      "path": "images/demo-profile.png",
+      "fileName": "demo-profile.png",
+      "mediaType": "image/png",
+      "description": "Generated fictional demo avatar.",
+      "tags": [
+        "demo",
+        "profile"
+      ],
+      "sizeBytes": 3005,
+      "public": true
+    },
+    {
+      "id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      "fileRef": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      "path": "projects/climate-data-report.pdf",
+      "fileName": "climate-data-report.pdf",
+      "mediaType": "application/pdf",
+      "description": "Fictional example project report. Not real student work.",
+      "tags": [
+        "demo",
+        "project"
+      ],
+      "sizeBytes": 2866,
+      "public": true
+    }
+  ]
+}

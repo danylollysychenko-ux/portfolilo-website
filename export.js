@@ -98,19 +98,6 @@
       );
       return `<h3>${esc(item.title || "Academic evidence")}</h3><p>${esc(item.description || "")}</p>${file}`;
     });
-    const standards = Object.values(portfolio.cewStandards || {}).map(
-      (item) => {
-        const evidence = (item.evidence || [])
-          .map((entry) =>
-            fileSection(entry, entry.title || item.title, entry.fileName),
-          )
-          .join("");
-        const attachment = item.evidenceFile?.fileName
-          ? `<p>Evidence file: ${esc(item.evidenceFile.fileName)}</p>`
-          : "";
-        return `<h3>${esc(item.id || "CEW")}: ${esc(item.title || "Standard")}</h3><p>${esc(item.explanation || item.description || "")}</p>${attachment}${evidence}`;
-      },
-    );
     const hiring = [
       ["Cover letter", portfolio.hiringDocuments?.coverLetter],
       ["Resume", portfolio.hiringDocuments?.resume],
@@ -132,7 +119,6 @@
     ${section("Awards", accomplishments.join("") || `<p class="empty">No awards added.</p>`)}
     ${section("CareerSafe", careerSafe.join("") || `<p class="empty">No CareerSafe certifications added.</p>`)}
     ${section("Supporting academics", academicItems.join("") || `<p class="empty">No academic evidence added.</p>`)}
-    ${section("CEW standards", standards.join("") || `<p class="empty">No CEW evidence added.</p>`)}
     <div class="footer">ECTS Career Portfolio Creator · ${esc(name || "Student")} · ${esc(program)}</div>`;
     document.getElementById("portfolio").innerHTML = content;
     document.getElementById("status").textContent =

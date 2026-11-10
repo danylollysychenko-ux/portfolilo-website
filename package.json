@@ -31,6 +31,7 @@
       "export-final.js",
       "main.cjs",
       "preload.cjs",
+        "examples/showcase.ects-portfolio",
       "package.json"
     ]
   },

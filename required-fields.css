@@ -39,9 +39,11 @@
 
 .profile-position-preview {
   position: relative;
-  width: 135px;
-  height: 180px;
+  width: 150px;
+  height: 150px;
+  aspect-ratio: 1;
   overflow: hidden;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
@@ -58,6 +60,8 @@
   margin: 0;
   padding: 0;
   object-fit: cover;
+  object-position: center top;
+  border-radius: 50%;
 }
 
 .profile-position-preview img.visible {
@@ -82,5 +86,12 @@
 @media (max-width: 520px) {
   .profile-position-controls {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .profile-position-preview {
+    width: 70px;
+    height: 70px;
   }
 }
