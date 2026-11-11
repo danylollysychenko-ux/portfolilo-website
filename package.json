@@ -5,6 +5,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
+    "build": "electron-builder --win portable",
     "package": "electron-builder --win portable"
   },
   "devDependencies": {
